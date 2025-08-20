@@ -115,6 +115,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_ES7134
 	imply SND_SOC_ES7210
 	imply SND_SOC_ES7241
+	imply SND_SOC_ES7243
 	imply SND_SOC_ES8375
 	imply SND_SOC_GTM601
 	imply SND_SOC_HDAC_HDMI
@@ -1057,6 +1058,10 @@ config SND_SOC_ES7210
 
 config SND_SOC_ES7241
 	tristate "Everest Semi ES7241 CODEC"
+
+config SND_SOC_ES7243
+	tristate "Everest Semi ES7243 CODEC"
+	depends on I2C
 
 config SND_SOC_ES8156
 	tristate "Everest Semi ES8156 CODEC"
