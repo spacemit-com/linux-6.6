@@ -50,26 +50,6 @@ u32 get_sdio_rx_req_len_8852b(struct mac_ax_adapter *adapter, u32 *rx_req_len)
 	return MACSUCCESS;
 }
 
-u32 sdio_pre_init_8852b(struct mac_ax_adapter *adapter, void *param)
-{
-	u16 val16;
-	u32 val32;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-	val32 = MAC_REG_R32(R_AX_HCI_OPT_CTRL);
-	MAC_REG_W32(R_AX_HCI_OPT_CTRL, val32 | B_AX_SDIO_DATA_PAD_SMT);
-
-	val32 = MAC_REG_R32(R_AX_SDIO_TX_CTRL) & ~(B_AX_CMD53_TX_FORMAT);
-	MAC_REG_W32(R_AX_SDIO_TX_CTRL, val32 | B_AX_RXINT_READ_MASK_DIS);
-	adapter->sdio_info.tx_mode = MAC_AX_SDIO_TX_MODE_AGG;
-	adapter->sdio_info.tx_seq = 1;
-
-	val16 = MAC_REG_R16(R_AX_SDIO_BUS_CTRL);
-	MAC_REG_W16(R_AX_SDIO_BUS_CTRL, val16 | B_AX_EN_RPT_TXCRC);
-
-	return MACSUCCESS;
-}
-
 u32 tx_mode_cfg_sdio_8852b(struct mac_ax_adapter *adapter,
 			   enum mac_ax_sdio_tx_mode mode)
 {
@@ -447,7 +427,7 @@ void w_indir_cmd53_sdio_8852b(struct mac_ax_adapter *adapter, u32 adr, u32 val,
 		PLTFM_MSG_ERR("[ERR]sdio indirect CMD53 read\n");
 }
 
-void ud_fs_8852b(struct mac_ax_adapter *adapter)
+void ud_fs_8852b(struct mac_ax_adapter *adapter, enum sdio_hfc_sel hfc_sel)
 {
 	u8 val[28] = {0};
 	u32 fs0, fs1, fs2, fs3, fs4, fs5, fs6;
@@ -464,20 +444,23 @@ void ud_fs_8852b(struct mac_ax_adapter *adapter)
 	fs5 = le32_to_cpu(*(u32 *)(val + 20));
 	fs6 = le32_to_cpu(*(u32 *)(val + 24));
 
-	ch_info[MAC_AX_DMA_H2C].aval = GET_FIELD(fs0, B_AX_SDIO_ACH12_AVAL_PG);
-	pub_info->wp_aval = GET_FIELD(fs0, B_AX_SDIO_WP_AVAL_PG);
-	ch_info[MAC_AX_DMA_ACH0].used = GET_FIELD(fs1, B_AX_SDIO_ACH0_USE_PG);
-	ch_info[MAC_AX_DMA_ACH1].used = GET_FIELD(fs1, B_AX_SDIO_ACH1_USE_PG);
-	ch_info[MAC_AX_DMA_ACH2].used = GET_FIELD(fs2, B_AX_SDIO_ACH2_USE_PG);
-	ch_info[MAC_AX_DMA_ACH3].used = GET_FIELD(fs2, B_AX_SDIO_ACH3_USE_PG);
-	ch_info[MAC_AX_DMA_ACH4].used = GET_FIELD(fs3, B_AX_SDIO_ACH4_USE_PG);
-	ch_info[MAC_AX_DMA_ACH5].used = GET_FIELD(fs3, B_AX_SDIO_ACH5_USE_PG);
-	ch_info[MAC_AX_DMA_ACH6].used = GET_FIELD(fs4, B_AX_SDIO_ACH6_USE_PG);
-	ch_info[MAC_AX_DMA_ACH7].used = GET_FIELD(fs4, B_AX_SDIO_ACH7_USE_PG);
-	ch_info[MAC_AX_DMA_B0MG].used = GET_FIELD(fs5, B_AX_SDIO_ACH8_USE_PG);
-	ch_info[MAC_AX_DMA_B0HI].used = GET_FIELD(fs5, B_AX_SDIO_ACH9_USE_PG);
-	ch_info[MAC_AX_DMA_B1MG].used = GET_FIELD(fs6, B_AX_SDIO_ACH10_USE_PG);
-	ch_info[MAC_AX_DMA_B1HI].used = GET_FIELD(fs6, B_AX_SDIO_ACH11_USE_PG);
+	if (hfc_sel == SDIO_HFC_SEL_H2C) {
+		ch_info[MAC_AX_DMA_H2C].aval = GET_FIELD(fs0, B_AX_SDIO_ACH12_AVAL_PG);
+	} else {
+		pub_info->wp_aval = GET_FIELD(fs0, B_AX_SDIO_WP_AVAL_PG);
+		ch_info[MAC_AX_DMA_ACH0].used = GET_FIELD(fs1, B_AX_SDIO_ACH0_USE_PG);
+		ch_info[MAC_AX_DMA_ACH1].used = GET_FIELD(fs1, B_AX_SDIO_ACH1_USE_PG);
+		ch_info[MAC_AX_DMA_ACH2].used = GET_FIELD(fs2, B_AX_SDIO_ACH2_USE_PG);
+		ch_info[MAC_AX_DMA_ACH3].used = GET_FIELD(fs2, B_AX_SDIO_ACH3_USE_PG);
+		ch_info[MAC_AX_DMA_ACH4].used = GET_FIELD(fs3, B_AX_SDIO_ACH4_USE_PG);
+		ch_info[MAC_AX_DMA_ACH5].used = GET_FIELD(fs3, B_AX_SDIO_ACH5_USE_PG);
+		ch_info[MAC_AX_DMA_ACH6].used = GET_FIELD(fs4, B_AX_SDIO_ACH6_USE_PG);
+		ch_info[MAC_AX_DMA_ACH7].used = GET_FIELD(fs4, B_AX_SDIO_ACH7_USE_PG);
+		ch_info[MAC_AX_DMA_B0MG].used = GET_FIELD(fs5, B_AX_SDIO_ACH8_USE_PG);
+		ch_info[MAC_AX_DMA_B0HI].used = GET_FIELD(fs5, B_AX_SDIO_ACH9_USE_PG);
+		ch_info[MAC_AX_DMA_B1MG].used = GET_FIELD(fs6, B_AX_SDIO_ACH10_USE_PG);
+		ch_info[MAC_AX_DMA_B1HI].used = GET_FIELD(fs6, B_AX_SDIO_ACH11_USE_PG);
+	}
 }
 
 void rx_agg_cfg_sdio_8852b(struct mac_ax_adapter *adapter,

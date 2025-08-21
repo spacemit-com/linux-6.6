@@ -93,6 +93,7 @@ enum rtw_hal_status {
 #define FW_FILE_NIC_POSTFIX ""
 #define FW_FILE_NIC_CE_POSTFIX "_ce"
 #define FW_FILE_WOWLAN_POSTFIX "_wowlan"
+#define FW_FILE_WOWLAN_CE_POSTFIX "_wowlan_ce"
 #define FW_FILE_SPIC_POSTFIX "_spic"
 #define FW_FILE_AP_POSTFIX "_ap"
 

@@ -896,7 +896,8 @@ u32 mac_get_h2c_max_content_len(struct mac_ax_adapter *adapter);
 
 u32 c2h_wow_aoac_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
 			    struct rtw_c2h_info *info);
-u32 c2h_wow_apf_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
+			   				
+u32 c2h_apf_ofld_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
 			   struct rtw_c2h_info *info);
 
 u32 c2h_wow(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
@@ -1131,5 +1132,13 @@ static u32 get_twt_notify_event(struct mac_ax_adapter *adapter,
 static u32 c2h_twt_notify_evt_hdl(struct mac_ax_adapter *adapter, u8 *buf,
 				  u32 len, struct rtw_c2h_info *info);
 #endif
+
+#ifdef CONFIG_PHL_APF
+static u32 get_apf_rpt_notify_event(struct mac_ax_adapter *adapter,
+		      struct rtw_c2h_info *c2h,
+		      enum phl_msg_evt_id *id,
+		      u8 *c2h_info);
+#endif
+
 #endif
 

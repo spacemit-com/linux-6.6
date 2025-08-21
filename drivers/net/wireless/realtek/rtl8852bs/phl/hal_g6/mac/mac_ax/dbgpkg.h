@@ -214,6 +214,8 @@
 #define FW_PC_DBG_DUMP_HANGDETECT_EN 1
 #define FW_PC_DBG_DUMP_HANGDETECT_DIS 0
 #define H2C_PATHCHECK_TIMEOUT_MS 10
+#define H2C_USB_PATHCHECK_TIMEOUT_MS 100
+#define H2C_SDIO_PATHCHECK_TIMEOUT_MS 250
 
 /**
  * @enum mac_ax_sram_dbg_sel
@@ -1623,6 +1625,10 @@ u32 mac_ser_l2_st_check(struct mac_ax_adapter *adapter, u32 diag_level, u32 *tot
 u32 mac_pcie_status_dump(struct mac_ax_adapter *adapter);
 
 u32 mac_h2c_path_check(struct mac_ax_adapter *adapter);
+
+#if MAC_AX_SDIO_SUPPORT
+u32 mac_sdio_reg_dump(struct mac_ax_adapter *adapter);
+#endif
 
 #if MAC_AX_PLDR_DIAGNOSE_EN
 u32 mac_dbgcmd_init(struct mac_ax_adapter *adapter);

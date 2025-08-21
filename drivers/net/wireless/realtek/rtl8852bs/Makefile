@@ -145,14 +145,6 @@ USE_TRUE_PHY = y
 CONFIG_RTW_MBO = y
 # CONFIG_RTKM - n/m/y for not support / standalone / built-in
 CONFIG_RTKM ?= n
-########################## Android ###########################
-# CONFIG_RTW_ANDROID - 0: no Android, 4/5/6/7/8/9/10/11/12 : Android version
-CONFIG_RTW_ANDROID = 0
-
-ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
-EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
-endif
-
 ########################## Debug ###########################
 CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
@@ -214,6 +206,7 @@ CONFIG_HIGH_ACTIVE_DEV2HST = n
 CONFIG_TOGGLE_PULSE = 0
 CONFIG_PULSE_COUNT = 3
 CONFIG_MDNS_OFFLOAD = n
+CONFIG_APF = n
 ######### only for USB #########
 CONFIG_ONE_PIN_GPIO = n
 CONFIG_HIGH_ACTIVE_HST2DEV = n
@@ -247,6 +240,19 @@ CONFIG_BTC_EXT_CFG_ESOC_TYPE = 0
 #                         from customer platform (unit: dB)
 CONFIG_BTC_EXT_CFG_ANT_ISO_DB = default
 
+#### Trigger bcn comparison or disconnect after N consecutive mismatched beacons ####
+CONFIG_BCN_CNT_CONFIRM_HDL = y
+# Number of consecutive mismatched beacon keys before beacon comparison and disconnect
+# CONFIG_BCN_NEW_MAX_CNT = 0 will skip the beacon check
+CONFIG_BCN_NEW_MAX_CNT = 3
+########################## Android ###########################
+# CONFIG_RTW_ANDROID - 0: no Android, 4/5/6/7/8/9/10/11/12 : Android version
+CONFIG_RTW_ANDROID = 0
+
+ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
+EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
+CONFIG_GOOGLE_CAST_WAKEUP = y
+endif
 ###################### Platform Related #######################
 CONFIG_PLATFORM_I386_PC = n
 CONFIG_PLATFORM_RTL8198D = n
@@ -556,7 +562,7 @@ EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=2
 else ifeq ($(CONFIG_RTW_EDCCA_MODE_SEL), CBP)
 EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=3
 else ifeq ($(CONFIG_RTW_EDCCA_MODE_SEL), AUTO)
-EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=0xFF
+EXTRA_CFLAGS += -DCONFIG_RTW_EDCCA_MODE_SEL=255
 endif
 
 ifeq ($(CONFIG_RTW_ADAPTIVITY_EN), disable)
@@ -591,6 +597,13 @@ ifeq ($(CONFIG_80211W), y)
 EXTRA_CFLAGS += -DCONFIG_IEEE80211W
 endif
 
+ifeq ($(CONFIG_APF), y)
+EXTRA_CFLAGS += -DCONFIG_APF
+EXTRA_CFLAGS += -DCONFIG_APF_DBG
+CONFIG_WOWLAN = y
+CONFIG_WAKEUP_TYPE = 0x0d
+endif
+
 ifeq ($(CONFIG_WOWLAN), y)
 EXTRA_CFLAGS += -DCONFIG_WOWLAN -DRTW_WAKEUP_EVENT=$(CONFIG_WAKEUP_TYPE)
 EXTRA_CFLAGS += -DRTW_SUSPEND_TYPE=$(CONFIG_SUSPEND_TYPE)
@@ -610,6 +623,11 @@ EXTRA_CFLAGS += -DCONFIG_AP_WOWLAN
 ifeq ($(CONFIG_SDIO_HCI), y)
 EXTRA_CFLAGS += -DCONFIG_RTW_SDIO_PM_KEEP_POWER
 endif
+endif
+
+ifeq ($(CONFIG_BCN_CNT_CONFIRM_HDL), y)
+EXTRA_CFLAGS += -DCONFIG_BCN_CNT_CONFIRM_HDL
+EXTRA_CFLAGS += -DRTW_BCN_NEW_MAX_CNT=$(CONFIG_BCN_NEW_MAX_CNT)
 endif
 
 ifeq ($(CONFIG_LAYER2_ROAMING), y)

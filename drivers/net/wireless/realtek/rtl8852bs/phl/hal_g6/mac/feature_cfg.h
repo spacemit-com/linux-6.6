@@ -57,6 +57,13 @@
 /* For workaround temp usage */
 #define MAC_AX_RTK_WARD		0
 
+/* For workaround sdio issue temp usage */
+#ifdef CONFIG_PHL_WKARD_TXEN_ISSUE
+#define MAC_AX_RTK_WARD_TXEN_DATA_PLE_FULL	1
+#else
+#define MAC_AX_RTK_WARD_TXEN_DATA_PLE_FULL	0
+#endif
+
 /* For USB IO Offload Accelerate*/
 #define MAC_USB_IO_ACC		0
 
@@ -250,6 +257,9 @@ defined(CONFIG_PHL_CHANNEL_INFO_DBG)
 
 /* For workaround temp usage */
 #define MAC_AX_RTK_WARD		0
+
+/* For workaround sdio issue temp usage */
+#define MAC_AX_RTK_WARD_TXEN_DATA_PLE_FULL	0
 
 /* For USB IO Offload Accelerate*/
 #define MAC_USB_IO_ACC		0

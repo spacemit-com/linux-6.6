@@ -1402,6 +1402,8 @@ int rtw_mp_arx(struct net_device *dev,
 		char *pcar = extra;
 		u8 i = 0;
 
+		rtw_mp_phl_rx_cal_cmd(padapter);
+
 		if (strncmp(input, "rssi a", 6) == 0)
 			rssi_path = 0;
 		else if (strncmp(input, "rssi b", 6) == 0)
@@ -2180,7 +2182,7 @@ int rtw_mp_set_tsside(struct net_device *dev,
 			rtw_mp_set_tsside2verify(padapter, (u32)tsside_val, rf_path);
 			pmp_priv->bspecif_tssi_de = true;
 			pmp_priv->specif_tsside_val = tsside_val;
-			if (pmp_priv->tssi_mode == RTW_MP_TSSI_ON && bk_txpwr > 17 * TX_POWER_BASE) {
+			if (pmp_priv->tssi_mode >= RTW_MP_TSSI_ON && bk_txpwr > 17 * TX_POWER_BASE) {
                			 pmp_priv->txpowerdbm = 16 * TX_POWER_BASE ;
                 		for (rfpath_i = 0 ; rfpath_i < tx_nss; rfpath_i ++)
                         		rtw_mp_txpower_dbm(padapter, rfpath_i);

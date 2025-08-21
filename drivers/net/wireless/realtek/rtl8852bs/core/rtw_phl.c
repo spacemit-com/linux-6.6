@@ -29,7 +29,7 @@ static enum phl_cmd_type rtw_cmdf_to_phl_cmd_type(u8 flag)
 static const char *const _band_cap_str[] = {
 	/* BIT0 */"2G",
 	/* BIT1 */"5G",
-	/* BIT2 */"6G",	
+	/* BIT2 */"6G",
 };
 
 static const char *const _bw_cap_str[] = {
@@ -114,7 +114,7 @@ void rtw_hw_dump_hal_spec(void *sel, struct dvobj_priv *dvobj)
 			_RTW_PRINT_SEL(sel, "%s ", _wl_func_str[i]);
 	}
 	_RTW_PRINT_SEL(sel, "\n");
-	
+
 #if 0 /*GEORGIA_TODO_FIXIT*/
 
 	RTW_PRINT_SEL(sel, "%s pg_txpwr_saddr:0x%X\n", hw_cap_str, hal_spec->pg_txpwr_saddr);
@@ -123,7 +123,7 @@ void rtw_hw_dump_hal_spec(void *sel, struct dvobj_priv *dvobj)
 }
 
 void rtw_dump_phl_sta_info(void *sel, struct sta_info *sta)
-{	
+{
 	struct rtw_phl_stainfo_t *phl_sta = sta->phl_sta;
 	char mac_addr_str[MAC_FMT_LEN];
 
@@ -235,7 +235,7 @@ inline u8 rtw_hw_get_wireless_mode(struct dvobj_priv *dvobj)
 		wireless_mode |= WLAN_MD_11AX;
 	}
 	#endif
-	
+
 	return wireless_mode;
 }
 
@@ -1709,6 +1709,16 @@ int rtw_hw_set_ch_bw(struct _ADAPTER *a, struct _ADAPTER_LINK *alink,
 		cmd_timeout = a->cmd_timeout;
 	}
 #endif
+
+	if(a->phl_role == NULL) {
+		err = -1;
+		RTW_INFO("%s: a->phl_role null!!! set band(%u) ch(%u) bw(%u) offset(%u) FAIL!\n",
+			__func__, band, ch, bw, offset);
+		_rtw_mutex_unlock(&dvobj->setch_mutex);
+
+		return err;
+	}
+
 	status = rtw_phl_cmd_set_ch_bw(a->phl_role, alink->wrlink,
 					&chdef, rt_type, cmd_type, cmd_timeout);
 
@@ -2776,6 +2786,9 @@ int rtw_hw_connected(struct _ADAPTER *a)
 
 		if (rtw_sta_hal_media_status_rpt_cmd(a, sta, true, RTW_CMDF_DIRECTLY) != _SUCCESS)
 			return -1;
+#ifdef CONFIG_APF
+		rtw_apf_cmd_hdl(a, PHL_APF_CMD_MEDIA_STATUS_CHG);
+#endif
 		rtw_dump_phl_sta_info(RTW_DBGDUMP, sta);
 
 		/* Todo: udpate capability: short preamble, slot time */
@@ -2889,7 +2902,9 @@ int rtw_hw_disconnect(struct _ADAPTER *a, struct sta_info *sta)
 						PHL_CMD_DIRECTLY, 0);
 		if (status != RTW_PHL_STATUS_SUCCESS)
 			return -1;
-
+#ifdef CONFIG_APF
+		rtw_apf_cmd_hdl(a, PHL_APF_CMD_MEDIA_STATUS_CHG);
+#endif
 		rtw_dump_phl_sta_info(RTW_DBGDUMP, sta);
 	}
 
@@ -3203,7 +3218,7 @@ void rtw_dump_env_rpt(struct _ADAPTER *a, void *sel)
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(a);
 
 	rtw_phl_get_env_rpt(phl, &rpt, alink->wrlink->hw_band);
-	
+
 	RTW_PRINT_SEL(sel, "tx_ratio:%d (%%)\n", rpt.nhm_tx_ratio);
 	RTW_PRINT_SEL(sel, "clm_ratio:%d (%%)\n", rpt.nhm_cca_ratio);
 	RTW_PRINT_SEL(sel, "nhm_ratio:%d (%%)\n", rpt.nhm_ratio);
@@ -3546,7 +3561,7 @@ static u8 _cfg_mdns_ofld_info(struct _ADAPTER *a)
 		if (!is_all_null(pmlmeinfo->ip6_addr, RTW_IPv6_ADDR_LEN))
 			_rtw_memcpy(info->mdns_ipv6_header.src_ipv6_addr,
 			            pmlmeinfo->ip6_addr, IPV6_ADDRESS_LENGTH);
-#endif	
+#endif
 	}
 	rtw_phl_cfg_mdns_ofld_info(phl, info);
 
@@ -3801,7 +3816,6 @@ static u8 _wow_cfg(struct _ADAPTER *a, u8 wow_en, u8 no_link_mode)
 		if (!_cfg_mdns_ofld_info(a))
 			return _FAIL;
 #endif
-
 		if (!_cfg_realwow_info(a))
 			return _FAIL;
 

@@ -2217,6 +2217,9 @@ _general_mdl_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
 	case MSG_EVT_CONNECT_CMD_DBCC_DIS:
 	case MSG_EVT_DISCONNECT_CMD_DBCC_EN:
 #endif
+#ifdef CONFIG_PHL_APF
+	case MSG_EVT_APF_CTRL:
+#endif
 		PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): MDL_ID(%d)-EVT_ID(%d) in %s phase.\n", __func__,
 			MSG_MDL_ID_FIELD(msg->msg_id), MSG_EVT_ID_FIELD(msg->msg_id),
 			(IS_MSG_IN_PRE_PHASE(msg->msg_id) ? "pre-protocol" : "post-protocol"));

@@ -276,6 +276,10 @@ struct halrf_rx_dck_info {
 	bool is_auto_res;
 	u8 ther_rxdck[KPATH];
 	u8 rek_cnt[KPATH];
+	u8 ori_i_low;
+	u8 ori_q_low;
+	u8 ori_i_high;
+	u8 ori_q_high;
 };
 
 struct halrf_mcc_info {

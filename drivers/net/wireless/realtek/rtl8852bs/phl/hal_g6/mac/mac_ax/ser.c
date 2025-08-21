@@ -1461,45 +1461,48 @@ u32 mac_set_err_status(struct mac_ax_adapter *adapter,
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	u32 cnt = MAC_SET_ERR_DLY_CNT;
 	u32 ret = MACSUCCESS;
+	bool skip_ctrl_check = false;
 
 	if (err > MAC_AX_SET_ERR_MAX) {
 		PLTFM_MSG_ERR("Bad set-err-status value\n");
 		return MACFUNCINPUT;
 	}
 
-	PLTFM_MUTEX_LOCK(&adapter->lock_info.err_set_lock);
+	if (err == MAC_AX_ERR_L1_DISABLE_EN || err == MAC_AX_ERR_L1_RCVY_EN)
+		skip_ctrl_check = true;
 
-	while (--cnt) {
-		if (!MAC_REG_R32(R_AX_HALT_H2C_CTRL))
-			break;
-		PLTFM_DELAY_US(MAC_SET_ERR_DLY_US);
-	}
-	if (!cnt) {
-		PLTFM_MSG_ERR("FW does not receive previous msg\n");
-		ret = MACPOLLTO;
-		goto end;
+	PLTFM_MUTEX_LOCK(&adapter->lock_info.err_set_lock);
+	if (!skip_ctrl_check) {
+		while (--cnt) {
+			if (!MAC_REG_R32(R_AX_HALT_H2C_CTRL))
+				break;
+			PLTFM_DELAY_US(MAC_SET_ERR_DLY_US);
+		}
+		if (!cnt) {
+			PLTFM_MSG_ERR("FW does not receive previous msg\n");
+			ret = MACPOLLTO;
+			goto end;
+		}
 	}
 
 	if (err == MAC_AX_ERR_L1_DISABLE_EN)
 		adapter->sm.fw_rst = MAC_AX_FW_RESET_RECV_DONE;
 
 	MAC_REG_W32(R_AX_HALT_H2C, err);
-#if MAC_AX_8852A_SUPPORT || MAC_AX_8852B_SUPPORT || MAC_AX_8852BT_SUPPORT || MAC_AX_8851B_SUPPORT
-	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851B)) {
+#if MAC_AX_8852A_SUPPORT
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
 		MAC_REG_W32(R_AX_HALT_H2C_CTRL, B_AX_HALT_H2C_TRIGGER);
-	}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8852D_SUPPORT || MAC_AX_8192XB_SUPPORT
-	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
+#if MAC_AX_8852B_SUPPORT || MAC_AX_8852BT_SUPPORT || MAC_AX_8851B_SUPPORT || \
+MAC_AX_8852C_SUPPORT || MAC_AX_8852D_SUPPORT || MAC_AX_8192XB_SUPPORT
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851B) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB)) {
-		if (err != MAC_AX_ERR_L1_DISABLE_EN &&
-		    err != MAC_AX_ERR_L1_RCVY_EN) {
+		if (!skip_ctrl_check)
 			MAC_REG_W32(R_AX_HALT_H2C_CTRL, B_AX_HALT_H2C_TRIGGER);
-		}
 	}
 #endif
 
@@ -1604,6 +1607,11 @@ u32 mac_get_err_status(struct mac_ax_adapter *adapter,
 	mac_dbg_log_dump(adapter);
 #endif /* #if MAC_AX_FEATURE_DBGPKG */
 	MAC_REG_W32(R_AX_HALT_C2H, 0);
+	if (*err == MAC_AX_ERR_L1_RESET_RECOVERY_DONE) {
+		MAC_REG_W32(R_AX_DMAC_ERR_IMR, DMAC_ERR_IMR_EN);
+		MAC_REG_W32(R_AX_CMAC_ERR_IMR, CMAC0_ERR_IMR_EN);
+		MAC_REG_W32(R_AX_CMAC_ERR_IMR_C1, CMAC1_ERR_IMR_EN);
+	}
 end:
 	adapter->sm.l2_st = MAC_AX_L2_EN;
 	PLTFM_MUTEX_UNLOCK(&adapter->lock_info.err_get_lock);
@@ -1841,6 +1849,7 @@ u32 mac_chk_err_status(struct mac_ax_adapter *adapter, u8 *ser_status)
 
 	switch (err) {
 	case MAC_AX_ERR_L1_PREERR_DMAC:
+	case MAC_AX_ERR_L1_ERR_DMAC:
 	case MAC_AX_ERR_L0_PROMOTE_TO_L1:
 		*ser_status = MAC_AX_L1_TRUE;
 		break;

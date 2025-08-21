@@ -21,16 +21,25 @@ static void _hal_pre_init_8852bs(struct rtw_phl_com_t *phl_com,
 {
 	struct mac_ax_trx_info *trx_info = &init_52bs->trx_info;
 	struct mac_ax_host_rpr_cfg *rpr_cfg = (struct mac_ax_host_rpr_cfg *)hal_info->rpr_cfg;
-	/*struct mac_ax_intf_info *intf_info = &init_52bs->intf_info;*/
+	struct mac_ax_intf_info *intf_info = &init_52bs->intf_info;
 
 	if (true == phl_com->dev_cap.tx_mu_ru)
 		trx_info->trx_mode = MAC_AX_TRX_SW_MODE;
 	else
 		trx_info->trx_mode = MAC_AX_TRX_HW_MODE;
 
+	#ifdef RTW_WKARD_PHL_SD_RESET_DISABLE
+	intf_info->sdio_intf_info.sd_reset = MAC_AX_SDIO_DISABLE;
+	#else
+	intf_info->sdio_intf_info.sd_reset = MAC_AX_SDIO_IGNORE;
+	#endif
+
+	#ifndef CONFIG_RTL8852BT
 	if (phl_com->drv_mode == RTW_DRV_MODE_LOGO_TEST)
 		trx_info->qta_mode = MAC_AX_QTA_SCC_LOGO;
-	else if (phl_com->dev_cap.quota_turbo == true)
+	else
+	#endif
+	if (phl_com->dev_cap.quota_turbo == true)
 		trx_info->qta_mode = MAC_AX_QTA_SCC_TURBO;
 	else
 		trx_info->qta_mode = MAC_AX_QTA_SCC;

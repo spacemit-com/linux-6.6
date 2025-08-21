@@ -1707,6 +1707,8 @@ _phl_mrc_module_ap_started_hdlr(struct phl_info_t *phl_info,
 {
 	enum rtw_phl_status psts = RTW_PHL_STATUS_FAILURE;
 	struct rtw_wifi_role_link_t *rlink = NULL;
+	struct rtw_phl_stainfo_t *sta = NULL;
+	enum phl_upd_mode mode;
 	u8 idx = 0;
 
 	PHL_TRACE(COMP_PHL_MCC, _PHL_INFO_, "%s: wrole->id(%d)\n",
@@ -1717,14 +1719,25 @@ _phl_mrc_module_ap_started_hdlr(struct phl_info_t *phl_info,
 		goto _exit;
 	}
 
+	wrole->mstate = MLME_LINKED;
 	for (idx = 0; idx < wrole->rlink_num; idx++) {
 		rlink = get_rlink(wrole, idx);
+		sta = rtw_phl_get_stainfo_self(phl_info, rlink);
 
+		rlink->mstate = MLME_LINKED;
 		psts = phl_mr_info_upt(phl_info, rlink);
 		if (psts != RTW_PHL_STATUS_SUCCESS) {
 			PHL_ERR("%s mr info upt failed\n", __func__);
 			goto _exit;
 		}
+
+		mode = PHL_UPD_ROLE_TYPE_CHANGE;
+		psts = phl_change_stainfo(phl_info, sta, mode);
+		if (psts != RTW_PHL_STATUS_SUCCESS) {
+			PHL_ERR("%s change_stainfo failed\n", __func__);
+			goto _exit;
+		}
+
 		psts = rtw_phl_mr_rx_filter_opt(phl_info, rlink);
 		if (psts != RTW_PHL_STATUS_SUCCESS) {
 			PHL_ERR("%s set mr_rx_filter_opt failed\n", __func__);

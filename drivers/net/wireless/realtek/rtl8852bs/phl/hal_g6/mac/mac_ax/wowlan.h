@@ -46,6 +46,8 @@
 #define R_AX_DBG_WOW_READY 0x815E
 #define MASK_DBG_WOW_READY 0xFF
 
+
+
 enum DBG_FW_WOW_CPU_IO_RX_STATE {
 	WOW_CPU_RX_DIS = 0,
 	WOW_CPU_RX_EN = 1
@@ -55,6 +57,22 @@ enum DBG_FW_WOWLAN_READY {
 	WOWLAN_NOT_READY = 0x00,
 	WOWLAN_SLEEP_READY = 0x01,
 	WOWLAN_RESUME_READY = 0x02
+};
+
+enum APF_CMD {
+	APF_CMD_DISABLE = 0,
+	APF_CMD_ENABLE  = 1,
+	APF_CMD_REPORT  = 2,
+	APF_CMD_STANDBY = 3,
+	APF_CMD_CLEAR   = 4,
+	APF_CMD_CHANGE  = 5
+};
+
+enum APF_STATUS {
+	APF_DISABLE    = 0,
+	APF_ENABLE     = 1,
+	APF_UNFINISHED = 2,
+	APF_STANDBY    = 3,
 };
 
 enum FW_PROXY_OFLD_TYPE {
@@ -983,7 +1001,9 @@ u32 mac_proxy_snmp(struct mac_ax_adapter *adapter, struct rtw_hal_mac_proxy_snmp
 u32 mac_proxy_llmnr(struct mac_ax_adapter *adapter, struct rtw_hal_mac_proxy_llmnr *llmnr);
 u32 mac_mdns_ofld(struct mac_ax_adapter *adapter, struct rtw_hal_mac_mdns_ofld *pmdns_ofld);
 u32 mac_apf_ofld(struct mac_ax_adapter *adapter, struct rtw_hal_mac_apf *papf_ofld);
-
+u32 mac_apf_ofld_ctrl(struct mac_ax_adapter *adapter
+		, struct rtw_hal_mac_apf_ctrl *papf_ofld_ctrl
+		, enum rtw_fw_type fw_type);
 u32 mac_check_proxy_done(struct mac_ax_adapter *adapter, u8 *fw_ret);
 u32 mac_apf_get_report(struct mac_ax_adapter *adapter,
 		       struct rtw_hal_mac_apf_report *papf_ofld_rpt);

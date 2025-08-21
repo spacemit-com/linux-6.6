@@ -1335,6 +1335,9 @@ void rtw_mbo_build_probe_req_ies(
 {
 	u32 len =0;
 
+	if (padapter->dis_rt_cap & BIT(DIS_MBO))
+		return;
+
 	rtw_mbo_build_extended_cap(padapter, pframe, pattrib);
 
 	len = rtw_mbo_attr_sz_get(padapter, RTW_MBO_ATTR_CELL_DATA_CAP_ID);

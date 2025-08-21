@@ -987,6 +987,8 @@ struct	xmit_priv	{
 	u32 txsc_phl_err_cnt1;
 	u32 txsc_phl_err_cnt2;
 #endif /* CONFIG_CORE_TXSC */
+
+	u16 max_agg_time;
 };
 
 #if 0 /*CONFIG_CORE_XMITBUF*/

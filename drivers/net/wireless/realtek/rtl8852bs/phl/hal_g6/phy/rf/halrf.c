@@ -6759,6 +6759,7 @@ void halrf_si_reset(struct rf_info *rf)
 #ifdef RF_8852B_SUPPORT
 		case RF_RTL8852B:
 			halrf_si_reset_8852b(rf);
+			halrf_delay_us(rf, 1000); /*wa for S0 RCK val = 0 issue*/
 			break;
 #endif
 #ifdef RF_8852BT_SUPPORT

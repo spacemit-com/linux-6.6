@@ -120,11 +120,14 @@ enum rtw_edcca_mode_t {
 	RTW_EDCCA_CBP		= 3, /* contention based protocol */
 	RTW_EDCCA_MODE_NUM,
 	RTW_EDCCA_DEF		= RTW_EDCCA_MODE_NUM, /* default (ref to domain code), used at country chplan map's override field */
-	RTW_EDCCA_AUTO		= 0xFF, /* follow channel plan */
+	RTW_EDCCA_AUTO		= 255, /* follow channel plan */
 };
 
 extern const char *const _rtw_edcca_mode_str[];
 #define rtw_edcca_mode_str(mode) (((mode) >= RTW_EDCCA_MODE_NUM) ? _rtw_edcca_mode_str[RTW_EDCCA_NORM] : _rtw_edcca_mode_str[(mode)])
+
+#define RTW_EDCCA_MODE_SEL_VALID(mode) ((mode) < RTW_EDCCA_MODE_NUM || (mode) == RTW_EDCCA_AUTO)
+#define rtw_edcca_mode_sel_str(mode) (((mode) == RTW_EDCCA_AUTO) ? "AUTO" : rtw_edcca_mode_str(mode))
 
 enum rtw_dfs_regd {
 	RTW_DFS_REGD_NONE	= 0,
@@ -207,6 +210,7 @@ char *rtw_get_env_bmp_str(char *buf, u8 bmp);
 char *rtw_get_edcca_mode_of_bands_str(char *buf, u8 mode_of_band[]);
 void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock);
 u8 rtw_get_edcca_mode(struct dvobj_priv *dvobj, enum band_type band);
+void rtw_edcca_mode_sel_msg(void *sel, struct dvobj_priv *dvobj);
 
 #if CONFIG_TXPWR_LIMIT
 #define TXPWR_NAME_OF_BANDS_STR_LEN (((1 + 8 + 1) * BAND_MAX) + (4 * CONFIG_IEEE80211_BAND_6GHZ) + 1)
@@ -503,6 +507,7 @@ enum chplan_confs_type {
 	CHPLAN_CONFS_INIT_REGD_ALWAYS_APPLY,
 	CHPLAN_CONFS_USER_REGD_ALWAYS_APPLY,
 	CHPLAN_CONFS_BCN_HINT_VALID_MS,
+	CHPLAN_CONFS_EDCCA_MODE_SEL,
 	CHPLAN_CONFS_CIS_EN_MODE,
 	CHPLAN_CONFS_CIS_FLAGS,
 	CHPLAN_CONFS_CIS_EN_ROLE,
@@ -521,6 +526,7 @@ struct chplan_confs {
 	bool init_regd_always_apply;
 	bool user_regd_always_apply;
 	u32 bcn_hint_valid_ms;
+	u8 edcca_mode_sel;
 #ifdef CONFIG_80211D
 	u8 cis_en_mode;
 	u8 cis_flags;
@@ -614,7 +620,7 @@ struct get_chplan_resp {
 	struct chplan_confs confs;
 
 	u8 chs_len;
-	RT_CHANNEL_INFO chs[0];
+	RT_CHANNEL_INFO chs[];
 };
 
 struct get_channel_plan_param {

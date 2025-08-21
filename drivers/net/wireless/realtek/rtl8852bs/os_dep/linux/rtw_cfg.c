@@ -209,7 +209,7 @@ int rtw_tx_ampdu_amsdu = 2;
 int rtw_tx_ampdu_num = 0;
 module_param(rtw_tx_ampdu_num, int, 0644);
 
-int rtw_quick_addba_req = 0;
+int rtw_quick_addba_req = 1;
 
 static uint rtw_rx_ampdu_sz_limit_1ss[4] = CONFIG_RTW_RX_AMPDU_SZ_LIMIT_1SS;
 static uint rtw_rx_ampdu_sz_limit_1ss_num = 0;
@@ -317,6 +317,15 @@ int rtw_rx_nss = 0;
 module_param(rtw_rf_path, int, 0644);
 module_param(rtw_tx_nss, int, 0644);
 module_param(rtw_rx_nss, int, 0644);
+
+#if defined(CONFIG_RTW_IO_RECORDS) && !CONFIG_RTW_IO_RECORDS_STATIC
+uint rtw_io_records_num = CONFIG_RTW_IO_RECORDS_NUM;
+module_param(rtw_io_records_num, uint, 0644);
+uint rtw_io_records_enable = CONFIG_RTW_IO_RECORDS_ENABLE;
+module_param(rtw_io_records_enable, uint, 0644);
+uint rtw_io_records_loop = CONFIG_RTW_IO_RECORDS_LOOP;
+module_param(rtw_io_records_loop, uint, 0644);
+#endif /* CONFIG_RTW_IO_RECORDS  && !CONFIG_RTW_IO_RECORDS_STATIC */
 
 #ifdef CONFIG_REGD_SRC_FROM_OS
 static uint rtw_regd_src = CONFIG_RTW_REGD_SRC;
@@ -683,7 +692,7 @@ MODULE_PARM_DESC(rtw_hiq_filter, "0:allow all, 1:allow special, 2:deny all");
 
 uint rtw_edcca_mode_sel = CONFIG_RTW_EDCCA_MODE_SEL;
 module_param(rtw_edcca_mode_sel, uint, 0644);
-MODULE_PARM_DESC(rtw_edcca_mode_sel, "0:NORMAL, 1:CS, 2:ADPT, 3:CBP, 0xFF:auto");
+MODULE_PARM_DESC(rtw_edcca_mode_sel, "0:NORMAL, 1:CS, 2:ADPT, 3:CBP, 255:auto");
 
 uint rtw_adaptivity_en = CONFIG_RTW_ADAPTIVITY_EN;
 module_param(rtw_adaptivity_en, uint, 0644);
@@ -1236,7 +1245,7 @@ inline void rtw_regsty_load_country_ie_slave_settings(struct registry_priv *regs
 static void rtw_regsty_load_edcca_mode_settings(struct registry_priv *regsty)
 {
 	regsty->edcca_mode_sel = (u8)rtw_edcca_mode_sel;
-	if (regsty->edcca_mode_sel < RTW_EDCCA_MODE_NUM || regsty->edcca_mode_sel == RTW_EDCCA_AUTO) {
+	if (RTW_EDCCA_MODE_SEL_VALID(regsty->edcca_mode_sel)) {
 		if (regsty->edcca_mode_sel == RTW_EDCCA_NORM) {
 			/* consider old interfaces */
 			if (rtw_adaptivity_en == RTW_ADAPTIVITY_EN_ENABLE) {
@@ -1732,9 +1741,10 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 	phl_com->dev_sw_cap.rf_board_opt = 0xFF;
 
 #ifdef CONFIG_POWER_SAVE
+	phl_com->dev_sw_cap.ps_cap.leave_fail_act = PS_LEAVE_FAIL_SER_L1_RECOVERY;
 #ifdef CONFIG_RTW_WKARD_PS_DEFAULT_OFF
 	phl_com->dev_sw_cap.ps_cap.init_rt_stop_rson = PS_RT_DEBUG;
-#endif
+#endif /* CONFIG_RTW_WKARD_PS_DEFAULT_OFF */
 #ifdef CONFIG_RTW_IPS
 	rtw_update_ips_setting(RTW_IPS_MODE, rtw_ips_mode,
 			       &phl_com->dev_sw_cap.ps_cap.ips_en,
@@ -1799,7 +1809,11 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 #else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_form_hdr = false;
 #endif
+#ifdef CONFIG_APF
+	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = true;
+#else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = false;
+#endif
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_tx_search_key = false;
 
 #ifdef CONFIG_80211AX_HE
@@ -2249,29 +2263,11 @@ int rtw_stbc_cap = 0x13;
 	return status;
 }
 
-static void rtw_cfg_edcca_mode_msg(void *sel, _adapter *adapter)
-{
-	struct registry_priv *regsty = &adapter->registrypriv;
-
-	RTW_PRINT_SEL(sel, "RTW_EDCCA_");
-	if (regsty->edcca_mode_sel == RTW_EDCCA_AUTO)
-		_RTW_PRINT_SEL(sel, "AUTO\n");
-	else
-		_RTW_PRINT_SEL(sel, "%s\n", rtw_edcca_mode_str(regsty->edcca_mode_sel));
-}
-
 void rtw_cfg_adaptivity_config_msg(void *sel, _adapter *adapter)
 {
 	struct registry_priv *regsty = &adapter->registrypriv;
 
-	rtw_cfg_edcca_mode_msg(sel, adapter);
-	_RTW_PRINT_SEL(sel, "adaptivity_idle_probability = %u\n", regsty->adaptivity_idle_probability);
-}
-
-bool rtw_cfg_adaptivity_needed(_adapter *adapter)
-{
-	struct registry_priv *regsty = &adapter->registrypriv;
-
-	return regsty->edcca_mode_sel != RTW_EDCCA_NORM;
+	rtw_edcca_mode_sel_msg(sel, adapter_to_dvobj(adapter));
+	RTW_PRINT_SEL(sel, "adaptivity_idle_probability = %u\n", regsty->adaptivity_idle_probability);
 }
 

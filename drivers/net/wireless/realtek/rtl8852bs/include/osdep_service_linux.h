@@ -161,7 +161,7 @@
  * refs/heads/android13-5.15-lts (5.15.106)
  */
 #if (defined(__ANDROID_COMMON_KERNEL__) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94)))
-        #define CONFIG_MLD_KERNEL_PATCH
+        #define CONFIG_ACK_5_15_LTS_KERNEL
 #endif
 
 #define ATOMIC_T atomic_t
@@ -520,6 +520,10 @@ struct thread_hdl{
 #define CLR_THREAD_STATUS(t, cl)	(t->thread_status &= ~(cl))
 #define CHK_THREAD_STATUS(t, ck) (t->thread_status & ck)
 
+#define RTW_TASK_COMM_LEN TASK_COMM_LEN
+static inline void rtw_get_task_comm(char *dst) { memcpy(dst, current->comm, RTW_TASK_COMM_LEN); }
+static inline unsigned int rtw_get_cpu_id(void) { return smp_processor_id(); }
+
 typedef void timer_hdl_return;
 typedef void *timer_hdl_context;
 
@@ -603,8 +607,143 @@ static inline void flush_signals_thread(void)
 	#define DMA_BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
 
+#define CONFIG_OSDEP_DIV64_API
+
+static inline u64 rtw_modular64(u64 x, u64 y)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+	u64 r = 0;
+#else
+	u32 r = 0;
+#endif
+
+	if (0 == y)
+		return 0;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+	div64_u64_rem(x, y, &r);
+#else
+	WARN_ON(y > U32_MAX);
+	div_u64_rem(x, y, &r);
+#endif
+
+	return r;
+}
+
+static inline u64 rtw_division64(u64 x, u64 y)
+{
+	return (0 != y) ? div64_u64(x, y) : 0;
+}
+
+static inline s64 rtw_division64_s64(s64 x, s64 y)
+{
+	return (0 != y) ? div64_s64(x, y) : 0;
+}
+
 typedef unsigned long systime;
 typedef ktime_t sysptime;
+
+#define CONFIG_OSDEP_SPTIME_API
+
+static inline sysptime rtw_sptime_get(void)
+{
+	return ktime_get(); /* CLOCK_MONOTONIC */
+}
+
+static inline sysptime rtw_sptime_get_raw(void)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
+	return ktime_get_raw(); /* CLOCK_MONOTONIC_RAW */
+#else
+	return ktime_get(); /* CLOCK_MONOTONIC */
+#endif
+}
+
+static inline sysptime rtw_sptime_set(s64 secs, const u32 nsecs)
+{
+	return ktime_set(secs, nsecs);
+}
+
+static inline sysptime rtw_sptime_zero(void)
+{
+	return ktime_set(0, 0);
+}
+
+/*
+ *   cmp1  < cmp2: return <0
+ *   cmp1 == cmp2: return 0
+ *   cmp1  > cmp2: return >0
+ */
+static inline int rtw_sptime_cmp(const sysptime cmp1, const sysptime cmp2)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+	return ktime_compare(cmp1, cmp2);
+#else
+	if (cmp1.tv64 < cmp2.tv64)
+		return -1;
+	if (cmp1.tv64 > cmp2.tv64)
+		return 1;
+	return 0;
+#endif
+}
+
+/*
+ * sub = lhs - rhs, in normalized form
+ */
+static inline sysptime rtw_sptime_sub(const sysptime lhs, const sysptime rhs)
+{
+	return ktime_sub(lhs, rhs);
+}
+
+/*
+ * add = lhs + rhs, in normalized form
+ */
+static inline sysptime rtw_sptime_add(const sysptime lhs, const sysptime rhs)
+{
+	return ktime_add(lhs, rhs);
+}
+
+static inline s64 rtw_sptime_to_ms(const sysptime sptime)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))
+	return ktime_to_ms(sptime);
+#else
+	struct timeval tv = ktime_to_timeval(sptime);
+
+	return (s64) tv.tv_sec * MSEC_PER_SEC + tv.tv_usec / USEC_PER_MSEC;
+#endif
+}
+
+static inline sysptime rtw_ms_to_sptime(u64 ms)
+{
+	return ns_to_ktime(ms * NSEC_PER_MSEC);
+}
+
+static inline s64 rtw_sptime_to_us(const sysptime sptime)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22))
+	return ktime_to_us(sptime);
+#else
+	struct timeval tv = ktime_to_timeval(sptime);
+
+	return (s64) tv.tv_sec * USEC_PER_SEC + tv.tv_usec;
+#endif
+}
+
+static inline sysptime rtw_us_to_sptime(u64 us)
+{
+	return ns_to_ktime(us * NSEC_PER_USEC);
+}
+
+static inline s64 rtw_sptime_to_ns(const sysptime sptime)
+{
+	return ktime_to_ns(sptime);
+}
+
+static inline sysptime rtw_ns_to_sptime(u64 ns)
+{
+	return ns_to_ktime(ns);
+}
 
 /*tasklet*/
 typedef struct tasklet_struct _tasklet;
@@ -1121,8 +1260,10 @@ static inline void rtw_dump_stack(void)
 #define rtw_warn_on(condition) \
 	do { \
 		if (condition) { \
+			RTW_WARN("RTW_WARN_ON triggered: =====> START\n"); \
 			WARN_ON(1); \
 			ATOMIC_INC((ATOMIC_T *)&rtw_warn_on_cnt); \
+			RTW_WARN("RTW_WARN_ON triggered: <===== END\n"); \
 		} \
 	} while (0)
 

@@ -31,12 +31,6 @@ u32 mac_sr_update(struct mac_ax_adapter *adapter,
 	val8 = (sr_info->sr_en) ? (val8 | B_AX_SR_EN) : (val8 & ~B_AX_SR_EN);
 	MAC_REG_W8(reg, val8);
 
-	val8 = MAC_REG_R8(R_AX_PREBKF_CFG_1);
-	if (sr_info->sr_en)
-		MAC_REG_W8(R_AX_PREBKF_CFG_1, MACTXEN_T1_FOR_SR);
-	else
-		MAC_REG_W8(R_AX_PREBKF_CFG_1, MACTXEN_T1_FOR_NOR);
-
 	reg = band == MAC_AX_BAND_1 ? R_AX_TCR0_C1 : R_AX_TCR0;
 	val8 = MAC_REG_R8(reg);
 	val8 = (sr_info->sr_field_v15_allowed) ?

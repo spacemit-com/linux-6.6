@@ -1768,7 +1768,7 @@ static void _action_bt_idle(struct btc_t *btc)
 			break;
 		}
 	} else { /* dedicated-antenna */
-		if (btc->cx.other.type != BTC_EXTSOC_FUNC_NONE) {
+		if (btc->cx.other.type != BTC_EXTSOC_FUNC_NONE && wl->ap_type != BTC_SPAP_CMW) {
 			btc->dm.slot_dur[CXST_W1] = 50;
 			btc->dm.slot_dur[CXST_B1] = 5;
 			policy_type = BTC_CXP_PFIX_TDW1B1;

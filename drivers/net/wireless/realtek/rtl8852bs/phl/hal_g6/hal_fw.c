@@ -265,7 +265,7 @@ rtw_hal_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal)
 	}
 
 #ifdef CONFIG_POWER_SAVE
-	if (fw_info->fw_type == RTW_FW_WOWLAN)
+	if (fw_info->fw_type == RTW_FW_WOWLAN || fw_info->fw_type == RTW_FW_WOWLAN_CE)
 		rtw_hal_ps_fw_cap_decision(phl_com, true);
 	else
 		rtw_hal_ps_fw_cap_decision(phl_com, false);

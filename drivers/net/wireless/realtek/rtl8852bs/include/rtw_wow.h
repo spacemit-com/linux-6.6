@@ -116,6 +116,13 @@ typedef struct rtl_priv_pattern {
 	char mask[MAX_WKFM_SIZE];
 } rtl_priv_pattern_t;
 
+#ifdef CONFIG_APF
+enum rtw_screen_mode {
+	SCREEN_ON = 0,
+	SCREEN_OFF = 1,
+};
+#endif
+
 struct wow_priv {
 	enum rtw_mac_wow_wake_reason wow_wake_reason;
 
@@ -126,6 +133,13 @@ struct wow_priv {
 #endif
 #ifdef CONFIG_MDNS_OFFLOAD
 	struct rtw_mdns_ofld_info mdns_ofld_info; //ryan
+#endif
+#ifdef CONFIG_APF
+	enum rtw_screen_mode screen_mode;
+	enum mlme_state mstate;
+	struct phl_apf_info apf_info;
+	/* TP th for active apf */
+	u32 apf_active_tp_th;
 #endif
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 	struct rtw_periodic_wake_info wow_periodic_wake;
@@ -179,6 +193,12 @@ int rtw_wow_add_mdns_passthru_name(_adapter *padapter, u8 *name, u8 name_len);
 void rtw_wow_clr_mdns_passthru_name(_adapter *padapter);
 void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru_list **passthru_list);
 #endif
+
+#ifdef CONFIG_APF
+void rtw_init_apf(struct _ADAPTER *padapter);
+void rtw_apf_cmd_hdl(struct _ADAPTER *padapter, enum phl_apf_cmd cmd);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PNO_SUPPORT
