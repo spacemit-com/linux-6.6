@@ -176,7 +176,7 @@ static struct mac_ax_priv_ops mac8852b_priv_ops = {
 	w_indir_cmd52_sdio_8852b, /* w_indir_cmd52_sdio */
 	w_indir_cmd53_sdio_8852b, /* w_indir_cmd53_sdio */
 	ud_fs_8852b, /* ud_fs */
-	sdio_pre_init_8852b, /* sdio_pre_init */
+	sdio_pre_init, /* sdio_pre_init */
 	tx_mode_cfg_sdio_8852b, /* tx_mode_cfg_sdio */
 	leave_suspend_sdio_8852b, /* leave_suspend_sdio */
 	get_int_latency_sdio_8852b, /* get_int_latency_sdio */

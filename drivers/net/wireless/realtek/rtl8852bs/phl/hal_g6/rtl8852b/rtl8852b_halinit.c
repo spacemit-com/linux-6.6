@@ -158,7 +158,11 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 
 	hal_com->dev_hw_cap.sec_cap.hw_form_hdr = false;
 	hal_com->dev_hw_cap.sec_cap.hw_tx_search_key = false;
+#ifdef CONFIG_PHL_APF
+	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = true;
+#else
 	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = false;
+#endif
 
 #ifdef CONFIG_MCC_SUPPORT
 	hal_com->dev_hw_cap.mcc_sup = true;
@@ -169,12 +173,20 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 		hal_com->dev_hw_cap.nan_sup = true;
 #endif /* CONFIG_PHL_NAN */
 
+#ifdef CONFIG_RTL8852BP
 	hal_com->dev_hw_cap.ps_cap.ips_cap = PS_CAP_PWR_OFF |
-		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
-	hal_com->dev_hw_cap.ps_cap.ips_wow_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+	hal_com->dev_hw_cap.ps_cap.lps_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+#else
+	hal_com->dev_hw_cap.ps_cap.ips_cap = PS_CAP_PWR_OFF |
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
 	hal_com->dev_hw_cap.ps_cap.lps_cap =
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+#endif
+	hal_com->dev_hw_cap.ps_cap.ips_wow_cap =
+		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+
 	hal_com->dev_hw_cap.ps_cap.lps_wow_cap =
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
 	hal_com->dev_hw_cap.ps_cap.bcn_tracking = false;
@@ -219,6 +231,9 @@ u32 _hal_cfg_rom_fw_8852b(enum rtw_fw_type fw_type, struct rtw_fw_info_t *fw_inf
 		break;
 	case RTW_FW_WOWLAN:
 		filename_postfix = FW_FILE_WOWLAN_POSTFIX;
+		break;
+	case RTW_FW_WOWLAN_CE:
+		filename_postfix = FW_FILE_WOWLAN_CE_POSTFIX;
 		break;
 	case RTW_FW_SPIC:
 		filename_postfix = FW_FILE_SPIC_POSTFIX;
@@ -270,6 +285,9 @@ static u32 _hal_read_fw_8852b(enum rtw_fw_type fw_type,
 	case RTW_FW_WOWLAN:
 		filename_postfix = FW_FILE_WOWLAN_POSTFIX;
 		break;
+	case RTW_FW_WOWLAN_CE:
+		filename_postfix = FW_FILE_WOWLAN_CE_POSTFIX;
+		break;
 	case RTW_FW_SPIC:
 		filename_postfix = FW_FILE_SPIC_POSTFIX;
 		break;
@@ -301,13 +319,21 @@ static u32 _hal_cfg_extnal_fw_8852b(struct rtw_phl_com_t *phl_com,
 	void *d = phlcom_to_drvpriv(phl_com);
 	u8 *tgt_buf = NULL;
 	u32 tgt_buf_size = 0;
+	u8 wow_fw_type = RTW_FW_MAX;
+
+#ifdef MAC_FW_CATEGORY_WOWLAN
+	wow_fw_type = RTW_FW_WOWLAN;
+#endif
+#ifdef MAC_FW_CATEGORY_WOWLANCE
+	wow_fw_type = RTW_FW_WOWLAN_CE;
+#endif
 
 	switch (fw_type) {
 	case RTW_FW_NIC:
 		_hal_read_fw_8852b(RTW_FW_NIC, fw_info->buf,
 			&fw_info->buf_size, ic_name);
 		/* preload wowlan fw */
-		_hal_read_fw_8852b(RTW_FW_WOWLAN, fw_info->wow_buf,
+		_hal_read_fw_8852b(wow_fw_type, fw_info->wow_buf,
 			&fw_info->wow_buf_size, ic_name);
 		/* target is still NIC */
 		tgt_buf = fw_info->buf;
@@ -317,7 +343,7 @@ static u32 _hal_cfg_extnal_fw_8852b(struct rtw_phl_com_t *phl_com,
 		_hal_read_fw_8852b(RTW_FW_NIC_CE, fw_info->buf,
 			&fw_info->buf_size, ic_name);
 		/* preload wowlan fw */
-		_hal_read_fw_8852b(RTW_FW_WOWLAN, fw_info->wow_buf,
+		_hal_read_fw_8852b(wow_fw_type, fw_info->wow_buf,
 			&fw_info->wow_buf_size, ic_name);
 		/* target is still NIC */
 		tgt_buf = fw_info->buf;
@@ -325,6 +351,12 @@ static u32 _hal_cfg_extnal_fw_8852b(struct rtw_phl_com_t *phl_com,
 		break;
 	case RTW_FW_WOWLAN:
 		_hal_read_fw_8852b(RTW_FW_WOWLAN, fw_info->wow_buf,
+			&fw_info->wow_buf_size, ic_name);
+		tgt_buf = fw_info->wow_buf;
+		tgt_buf_size = fw_info->wow_buf_size;
+		break;
+	case RTW_FW_WOWLAN_CE:
+		_hal_read_fw_8852b(RTW_FW_WOWLAN_CE, fw_info->wow_buf,
 			&fw_info->wow_buf_size, ic_name);
 		tgt_buf = fw_info->wow_buf;
 		tgt_buf_size = fw_info->wow_buf_size;
@@ -621,9 +653,17 @@ hal_wow_init_8852b(struct rtw_phl_com_t *phl_com, struct hal_info_t *hal_info,
 	struct hal_ops_t *hal_ops = hal_get_ops(hal_info);
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
 	bool linked = sta->rlink->mstate == MLME_LINKED ? true : false;
+	u8 wow_fw_type = RTW_FW_MAX;
+
+#ifdef MAC_FW_CATEGORY_WOWLAN
+	wow_fw_type = RTW_FW_WOWLAN;
+#endif
+#ifdef MAC_FW_CATEGORY_WOWLANCE
+	wow_fw_type = RTW_FW_WOWLAN_CE;
+#endif
 
 	hal_status = hal_ops->hal_cfg_fw(phl_com, hal_info, init_info->ic_name,
-	                                 RTW_FW_WOWLAN);
+	                                 wow_fw_type);
 	if (hal_status != RTW_HAL_STATUS_SUCCESS) {
 		PHL_ERR("%s: cfg fw fail(%d)!!\n", __func__, hal_status);
 		goto exit;

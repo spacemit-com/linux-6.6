@@ -250,6 +250,7 @@ int rtw_rfctl_init(struct dvobj_priv *dvobj)
 	rtw_rfctl_cis_init(rfctl, regsty);
 #endif
 
+	rfctl->edcca_mode_sel = regsty->edcca_mode_sel;
 	rfctl->last_edcca_mode_op_band = BAND_MAX;
 
 	rtw_rfctl_dfs_init(rfctl, regsty);
@@ -1645,6 +1646,10 @@ static u8 auth_null_update_cur_network(struct _ADAPTER_LINK *alink, union recv_f
 		rtw_update_adapter_network(&(pmlmepriv->dev_cur_network.network), bss, adapter, _TRUE);
 		rtw_update_network(&(alink->mlmepriv.cur_network.network), bss, adapter, _TRUE);
 
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+		alink->mlmepriv.new_beacon_cnts = 0;
+#endif
+
 		ret = _SUCCESS;
 	}
 
@@ -2297,6 +2302,10 @@ unsigned int OnAuthClient(_adapter *padapter, union recv_frame *precv_frame)
 				offset = (GetPrivacy(pframe)) ? 4 : 0;
 				pmlmeinfo->auth_status = le16_to_cpu(*(unsigned short *)((SIZE_PTR)pframe + \
 					WLAN_HDR_A3_LEN + offset + 4));
+				if (pmlmeinfo->auth_status == WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY) {
+					pmlmeinfo->auth_status = WLAN_STATUS_AUTH_TIMEOUT;
+					RTW_INFO("%s SAE WKRD auth reject, change status code: %d\n", __func__, pmlmeinfo->auth_status);
+				}
 				set_link_timer(pmlmeext, 1);
 				goto authclnt_fail;
 			}
@@ -3019,6 +3028,11 @@ unsigned int OnAssocRsp(_adapter *padapter, union recv_frame *precv_frame)
 	status = le16_to_cpu(*(unsigned short *)(pframe + WLAN_HDR_A3_LEN + 2));
 	if (status > 0) {
 		RTW_INFO("assoc reject, status code: %d\n", status);
+		if (rtw_sec_chk_auth_type(padapter, MLME_AUTHTYPE_SAE) &&
+			(status == WLAN_STATUS_ASSOC_REJECTED_TEMPORARILY)) {
+			status = WLAN_STATUS_AUTH_TIMEOUT;
+			RTW_INFO("%s SAE WKRD assoc reject, change status code: %d\n", __func__, status);
+		}
 		pmlmeinfo->state = WIFI_FW_NULL_STATE;
 		res = -4;
 		goto report_assoc_result;
@@ -3793,10 +3807,12 @@ unsigned int OnAction_back(_adapter *padapter, union recv_frame *precv_frame)
 	unsigned short	tid, status, reason_code = 0;
 	struct mlme_ext_priv	*pmlmeext = &padapter->mlmeextpriv;
 	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
+	struct xmit_priv	*pxmitpriv = &padapter->xmitpriv;
 	struct registry_priv *pregpriv = &padapter->registrypriv;
 	u8 *pframe = precv_frame->u.hdr.rx_data;
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	struct _ADAPTER_LINK *padapter_link = NULL;
+	int i;
 
 #ifdef CONFIG_80211N_HT
 
@@ -3885,6 +3901,15 @@ unsigned int OnAction_back(_adapter *padapter, union recv_frame *precv_frame)
 				}
 				asoc_cap->num_ampdu = asoc_cap->num_ampdu > buf_num ?
 					buf_num : asoc_cap->num_ampdu;
+
+				if (pxmitpriv->max_agg_time != 0) {
+					for (i=0; i < 4; i++) {
+						asoc_cap->edca[i].param =
+							(asoc_cap->edca[i].param & 0xFFFF) |
+								(pxmitpriv->max_agg_time << 16);
+						RTW_DBG("edca[%d]: 0x%x\n", i, asoc_cap->edca[i].param);
+					}
+				}
 
 				psts = rtw_phl_cmd_cfg_ampdu(GET_PHL_INFO(adapter_to_dvobj(padapter)),
 						padapter->phl_role, psta->phl_sta, PHL_CMD_DIRECTLY, 0);
@@ -8045,7 +8070,8 @@ static int issue_action_ba(_adapter *padapter, unsigned char *raddr,
 			pframe = rtw_set_fixed_ie(pframe, 1, &(pmlmeinfo->dialogToken), &(pattrib->pktlen));
 
 #ifdef CONFIG_80211AX_HE
-			if (is_supported_he(psta->phl_sta->wmode))
+			/* Logo sniffer checks that ampdu length must be <= 64 */
+			if (is_supported_he(psta->phl_sta->wmode) && !padapter->registrypriv.wifi_spec)
 				num_ampdu = MAX_BA_BUFFER_SIZE_HE;
 			else
 #endif
@@ -9559,6 +9585,7 @@ void start_clnt_auth(_adapter *padapter)
 		}
 
 		RTW_PRINT("SAE: start external auth\n");
+		set_link_timer(pmlmeext, SAE_AUTH_TIMEOUT);
 		rtw_cfg80211_external_auth_request(padapter, NULL);
 		return;
 	}
@@ -11185,7 +11212,7 @@ void link_timer_hdl(void *ctx)
 	if (rtw_sta_linking_test_force_fail())
 		RTW_INFO("rtw_sta_linking_test_force_fail\n");
 
-	if (pmlmeext->join_abort && pmlmeinfo->state != WIFI_FW_NULL_STATE) {
+	if (pmlmeext->join_abort) {
 		RTW_INFO(FUNC_ADPT_FMT" join abort\n", FUNC_ADPT_ARG(padapter));
 		pmlmeinfo->state = WIFI_FW_NULL_STATE;
 		report_join_res(padapter, -4, WLAN_STATUS_UNSPECIFIED_FAILURE);
@@ -11200,9 +11227,12 @@ void link_timer_hdl(void *ctx)
 
 #ifdef CONFIG_IOCTL_CFG80211
 		if (rtw_sec_chk_auth_type(padapter, MLME_AUTHTYPE_SAE)) {
+			RTW_INFO("link_timer_hdl: SAE auth timeout.\n");
 			if (pmlmeinfo->auth_status) {
 				report_join_res(padapter, -1, pmlmeinfo->auth_status);
 				pmlmeinfo->auth_status = 0; /* reset */
+			} else {
+				report_join_res(padapter, -1, WLAN_STATUS_AUTH_TIMEOUT);
 			}
 			return;
 		}
@@ -13514,9 +13544,10 @@ int rtw_sae_preprocess(_adapter *adapter, const u8 *buf, u32 len, u8 tx)
 	 * SAE authentication uses direct hashing,
 	 * instead of looping, to obtain the PWE.
 	 * 0x4c(76) : ANTI_CLOGGING_TOKEN_REQ
+	 * 0x4d(77) : FINITE_CYCLIC_GROUP_NOT_SUPPORTED
 	 * WPAS needs to resend AUTH req. with the token,
 	 * driver must pass 0x4c to WPAS to handle it. */
-	if (status == 0 || status == 0x7e || status == 0x4c)
+	if (status == 0 || status == 0x7e || status == 0x4c || status == 0x4d)
 		return _SUCCESS;
 exit:
 	return ret;

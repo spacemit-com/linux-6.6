@@ -388,6 +388,7 @@ enum btc_special_ap {
 	BTC_SPAP_TPL = 1,
 	BTC_SPAP_VW = 2,
 	BTC_SPAP_SPTN = 3,
+	BTC_SPAP_CMW = 4, /* for tis test */
 	BTC_SPAP_MAX
 };
 
@@ -1754,7 +1755,7 @@ struct btc_dm {
 	u8 le_init_en: 1;
 	u8 country_code_proc: 1;
 	u8 country_code_retry: 2;
-	u8 rsvd3: 1;
+	u8 cmw_ap: 1;
 
 	u8 vid;
 

@@ -769,11 +769,11 @@ void halrf_dump_rfk_reg(struct rf_info *rf, char input[][16], u32 *_used,
 	u32 out_len = *_out_len;
 	u32 addr = 0;
 
-	RF_DBG_CNSL(out_len, used, output + used, out_len - used,
+	RF_DBG_VAST(out_len, used, output + used, out_len - used,
 		      "===================[ RFK Reg start ]===================\n");
 
 	for (addr = 0x8000; addr < 0xa000; addr += 0x10)
-		RF_DBG_CNSL(out_len, used, output + used, out_len - used,
+		RF_DBG_VAST(out_len, used, output + used, out_len - used,
 			    " 0x%x : 0x%08x  0x%08x  0x%08x  0x%08x\n", addr,
 			    halrf_rreg(rf, addr, MASKDWORD),
 			    halrf_rreg(rf, addr + 0x4, MASKDWORD),

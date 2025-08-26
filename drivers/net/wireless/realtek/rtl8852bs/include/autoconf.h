@@ -72,6 +72,8 @@
 #define RTK_WKARD_CORE_BTC_STBC_CAP
 #endif
 
+/* #define RTW_WKARD_SD_RESET_DISABLE */
+
 /*
  * Public General Config
  */
@@ -224,7 +226,9 @@
 #define CONFIG_FW_SPECIFY_FROM_CORE
 #ifdef CONFIG_FW_SPECIFY_FROM_CORE
 #ifdef CONFIG_WOWLAN
-#define MAC_FW_CATEGORY_WOWLAN
+/* #define MAC_FW_CATEGORY_WOWLAN */
+/* Support APFv6 & MDNS OFFLOAD*/
+#define MAC_FW_CATEGORY_WOWLANCE
 #endif /*CONFIG_WOWLAN*/
 #define MAC_FW_8852B_U2
 #define MAC_FW_8852B_U3
@@ -268,13 +272,13 @@
 #endif /* !CONFIG_MP_INCLUDED */
 
 #ifdef CONFIG_POWER_SAVE
-	/* #define CONFIG_RTW_IPS */
-	/* #define CONFIG_RTW_LPS */
+	#define CONFIG_RTW_IPS
+	#define CONFIG_RTW_LPS
 	#ifdef CONFIG_RTW_IPS
 		#define CONFIG_FWIPS
 	#endif
 	#if defined(CONFIG_RTW_IPS) || defined(CONFIG_RTW_LPS)
-		/* #define CONFIG_RTW_WKARD_PS_DEFAULT_OFF */
+		#define CONFIG_RTW_WKARD_PS_DEFAULT_OFF
 		#define CONFIG_PS_FW_DBG
 	#endif
 	#ifdef CONFIG_WOWLAN
@@ -307,6 +311,25 @@
 
 
 #define CONFIG_RTW_DISABLE_PHL_LOG
+
+#ifdef CONFIG_APF
+#ifndef CONFIG_WOWLAN
+	#error "APF should enable WOWLAN"
+#endif
+#ifdef CONFIG_FW_SPECIFY_FROM_CORE
+	#undef MAC_FW_CATEGORY_NIC
+	#define MAC_FW_CATEGORY_NICCE
+	#undef MAC_FW_CATEGORY_WOWLAN
+	#define MAC_FW_CATEGORY_WOWLANCE
+#endif
+#ifdef CONFIG_APF_DBG
+	#undef CONFIG_RTW_DISABLE_PHL_LOG
+#endif
+	#define CONFIG_APF_VERSION 6000
+	#define CONFIG_APF_RAM_SIZE 4000
+	#define CONFIG_APF_RAM_FRAG_SIZE 1024
+#endif /* CONFIG_APF */
+
 #define CONFIG_LOGO_MODE_ADJUST_AMSDU_RXFIFO
 
 #define CONFIG_MSG_NUM 100
@@ -325,7 +348,7 @@
 	#define RTW_MAX_MGMT_TX_MS_GAS 2000
 #endif /* CONFIG_XMIT_ACK */
 
-#define CONFIG_PHL_CPU_BALANCE_THREAD
+/*#define CONFIG_PHL_CPU_BALANCE_THREAD*/
 #ifdef CONFIG_PHL_CPU_BALANCE_THREAD
 #define CPU_ID_TX 2
 #define CPU_ID_TX_CB 3

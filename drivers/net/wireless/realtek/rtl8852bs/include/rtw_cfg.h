@@ -53,6 +53,5 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj);
 #define RTW_ADAPTIVITY_MODE_CARRIER_SENSE 1
 
 void rtw_cfg_adaptivity_config_msg(void *sel, _adapter *adapter);
-bool rtw_cfg_adaptivity_needed(_adapter *adapter);
 
 #endif /*_RTW_CFG_H_*/

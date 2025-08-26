@@ -2695,7 +2695,7 @@ static int rtw_wx_set_enc(struct net_device *dev,
 		ret = -EOPNOTSUPP;
 		goto exit;
 	}
-	
+
 
 exit:
 
@@ -5824,7 +5824,7 @@ static int rtw_priv_get(struct net_device *dev,
 #endif
 
 	} else {
-			switch (subcmd) {
+		switch (subcmd) {
 #ifdef CONFIG_SDIO_INDIRECT_ACCESS
 			case MP_SD_IREAD:
 				status = rtw_mp_sd_iread(dev, info, wrqu, extra);
@@ -5841,8 +5841,8 @@ static int rtw_priv_get(struct net_device *dev,
 #endif
 			default:
 				return -EIO;
-			}
 		}
+	}
 
 	return status;
 }
@@ -7555,7 +7555,7 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_txpower"},
 	{ MP_ANT_TX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_ant_tx"},
-	{ MP_ANT_RX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_ANT_RX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_ant_rx"},
 	{ WRITE_REG , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "write_reg" },
@@ -7599,7 +7599,7 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_rx" },
 	{ MP_HW_TX_MODE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_hxtx" },
-	{ MP_PWRLMT, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_PWRLMT, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_pwrlmt" },
 	{ MP_PWRBYRATE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_pwrbyrate" },
@@ -7608,13 +7608,13 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 	{ MP_LCK, IW_PRIV_TYPE_CHAR | 1024, 0, "mp_lck"},
 	{ BT_EFUSE_FILE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "bt_efuse_file" },
-	{ MP_SWRFPath, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_SWRFPath, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_swrfpath" },
-	{ MP_LINK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_LINK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_link" },
 	{ MP_DPK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_dpk"},
-	{ MP_DPK_TRK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_DPK_TRK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_dpk_trk" },
 	{ MP_GET_TSSIDE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_get_tsside" },

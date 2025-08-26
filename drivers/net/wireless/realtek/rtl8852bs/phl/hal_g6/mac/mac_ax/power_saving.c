@@ -583,6 +583,12 @@ u32 mac_chk_leave_lps(struct mac_ax_adapter *adapter, u8 macid)
 	u8 macid_grp = macid >> MACID_GRP_SH;
 	u8 macid_sh = macid & MACID_GRP_MASK;
 
+	/* If FWIPS is also enabled in the same MACID, it should be followed by
+	 * leaving LPS. Bypass this check preventing from polling timeout.
+	 */
+	if (ips_status[macid_grp] & BIT(macid_sh))
+		return MACSUCCESS;
+
 	role = mac_role_srch(adapter, macid);
 
 	if (!role) {
@@ -764,6 +770,12 @@ u32 mac_chk_leave_ips(struct mac_ax_adapter *adapter, u8 macid)
 	u8 macid_grp = macid >> MACID_GRP_SH;
 	u8 macid_sh = macid & MACID_GRP_MASK;
 
+	/* If LPS is also enabled in the same MACID, it should be followed by
+	 * leaving FWIPS. Bypass this check preventing from polling timeout.
+	 */
+	if (lps_status[macid_grp] & BIT(macid_sh))
+		return MACSUCCESS;
+
 	role = mac_role_srch(adapter, macid);
 
 	if (!role) {
@@ -837,6 +849,16 @@ u32 mac_ps_notify_wake(struct mac_ax_adapter *adapter)
 	struct ps_rpwm_parm parm;
 
 	PLTFM_MEMSET(&parm, 0, sizeof(struct ps_rpwm_parm));
+
+#if MAC_AX_8852BT_SUPPORT || MAC_AX_8852D_SUPPORT
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
+		parm.notify_wake = 1;
+		send_rpwm(adapter, &parm);
+
+		return MACSUCCESS;
+	}
+#endif
 
 	if (adapter->mac_pwr_info.pwr_in_lps == 0) {
 		PLTFM_MSG_ERR("%s: Not in power saving!\n", __func__);

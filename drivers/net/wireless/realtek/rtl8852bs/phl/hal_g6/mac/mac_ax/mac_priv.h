@@ -266,7 +266,7 @@ struct mac_ax_priv_ops {
 				   u32 val, enum sdio_io_size size);
 	void (*w_indir_cmd53_sdio)(struct mac_ax_adapter *adapter, u32 adr, u32 val,
 				   enum sdio_io_size size);
-	void (*ud_fs)(struct mac_ax_adapter *adapter);
+	void (*ud_fs)(struct mac_ax_adapter *adapter, enum sdio_hfc_sel hfc_sel);
 	u32 (*sdio_pre_init)(struct mac_ax_adapter *adapter, void *param);
 	u32 (*tx_mode_cfg_sdio)(struct mac_ax_adapter *adapter,
 				enum mac_ax_sdio_tx_mode mode);

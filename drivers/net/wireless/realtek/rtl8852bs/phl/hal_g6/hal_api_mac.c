@@ -4789,7 +4789,7 @@ rtw_hal_mac_wow_dbg_dump(struct hal_info_t *hal_info)
 }
 
 
-#ifdef CONFIG_PHL_MDNS_OFFLOAD
+#if defined(CONFIG_PHL_MDNS_OFFLOAD) || defined(CONFIG_PHL_APF)
 static enum rtw_hal_status
 _hal_mac_cfg_check_proxy_done(struct hal_info_t *hal_info,
 			      u8 *fw_ret)
@@ -4819,7 +4819,8 @@ _hal_mac_cfg_check_proxy_done(struct hal_info_t *hal_info,
 	}
 	return RTW_HAL_STATUS_SUCCESS;
 }
-
+#endif
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
 enum rtw_hal_status
 rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
 							struct rtw_mdns_ofld_info *cfg)
@@ -4874,6 +4875,99 @@ rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
 	return RTW_HAL_STATUS_SUCCESS;
 }
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_APF
+#define APF_PKTID_OFST 4
+#define APF_PKTID_NUM 8
+/* Before calling rtw_hal_mac_ctrl_apf, must set rtw_apf_info->apf_cmd & do necessarry apf ram pkt ofld*/
+enum rtw_hal_status
+rtw_hal_mac_ctrl_apf(struct hal_info_t *hal_info, struct phl_apf_info *info)
+{
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct mac_ax_ops *hal_mac_ops = mac->ops;
+	struct rtw_hal_mac_apf_ctrl *apf_ctrl = NULL;
+	u8 *pktids;
+	u8 i;
+	u8 fw_ret = 0;
+	u32 mac_err = 0;
+
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	apf_ctrl = &mac->apf_info;
+	apf_ctrl->apf_cmd = info->apf_cmd;
+	apf_ctrl->apf_ram_size = MAX_APF_RAM_SIZE;
+	apf_ctrl->macid = info->macid;
+	apf_ctrl->pairwise_sec_algo = info->pairwise_sec_algo;
+	apf_ctrl->group_sec_algo = info->group_sec_algo;
+	apf_ctrl->hw_aes_iv = info->hw_sec_iv;
+
+	/* assign mac_pktid and apf_pktid with bitmask */
+	pktids = (u8*)((u8*)(apf_ctrl) + APF_PKTID_OFST);
+
+	/* APF_CMD_CHANGE will set correspond pktid, otherwise set to NOT_USED */
+	_os_mem_set(hal_to_drvpriv(hal_info), pktids, 0xFF, APF_PKTID_NUM);
+	apf_ctrl->apf_prog_size = 0;
+	apf_ctrl->apf_prog_frag_num = 0;
+	if (apf_ctrl->apf_cmd == PHL_APF_CMD_CHANGE) {
+#ifdef CONFIG_PHL_APF_DBG
+		PHL_INFO("%s() APF RAM change with machdr_chg(%u)\n", __func__, info->mac_chg);
+#endif
+		if (info->mac_chg) {
+			pktids[0] = info->apf_ram_frag_pktid[0];
+		}
+		apf_ctrl->apf_prog_frag_num = APF_RAM_FRAG_NUM(info->ram.prog_len, APF_RAM_FRAG_SIZE);
+		/* apf_ram_frag_pktid[1:4] */
+		for (i = 1; i <= apf_ctrl->apf_prog_frag_num; i++) {
+			pktids[i] = info->apf_ram_frag_pktid[i];
+		}
+		apf_ctrl->apf_prog_size = info->ram.prog_len;
+
+		info->mac_chg = 0;
+	}
+
+#ifdef CONFIG_PHL_APF_DBG
+	PHL_INFO("[APFDBG] (%s)\n",  __func__);
+	PHL_INFO("     ===== [apf_ctrl] =====\n");
+	PHL_INFO("apf_cmd(%s) apf_prog_frag_num(%u) apf_prog_size(%u) apf_ram_size(%u)\n",
+		 _apf_cmd_to_str(apf_ctrl->apf_cmd), apf_ctrl->apf_prog_frag_num, apf_ctrl->apf_prog_size, apf_ctrl->apf_ram_size);
+	PHL_INFO("pairwise_sec(%u) group_sec(%u) hw_aes_iv(%u)\n",
+		 apf_ctrl->pairwise_sec_algo, apf_ctrl->group_sec_algo, apf_ctrl->hw_aes_iv);
+	PHL_INFO("mac_pktid(%02X) apf_pktid1(%02X) apf_pktid2(%02X) apf_pktid3(%02X)\n",
+		 apf_ctrl->mac_pktid, apf_ctrl->apf_pktid1, apf_ctrl->apf_pktid2, apf_ctrl->apf_pktid3);
+	PHL_INFO("apf_pktid4(%02X) apf_pktid5(%02X) apf_pktid6(%02X) apf_pktid7(%02X)\n",
+		 apf_ctrl->apf_pktid4, apf_ctrl->apf_pktid5, apf_ctrl->apf_pktid6, apf_ctrl->apf_pktid7);
+#endif
+#ifdef CONFIG_PHL_APF_DUMMY_MAC
+	PHL_INFO("%s() DUMMY MAC\n", __func__);
+	if (info->apf_cmd != PHL_APF_CMD_REPORT && info->apf_cmd != PHL_APF_CMD_CLEAR &&
+	    info->apf_cmd != PHL_APF_CMD_CHANGE)
+		info->apf_state = (enum phl_apf_state)info->apf_cmd;
+
+	goto exit;
+#endif
+	if (hal_mac_ops->apf_ofld_ctrl) {
+		mac_err = hal_mac_ops->apf_ofld_ctrl(mac, apf_ctrl, info->fw_mode);
+		if (mac_err != MACSUCCESS) {
+			PHL_ERR("mac_apf_ofld_ctrl fail(%u)\n", mac_err);
+			hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
+			goto exit;
+		}
+	} else {
+		PHL_ERR("mac_apf_ofld is NULL\n");
+		hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
+		goto exit;
+	}
+
+	hstatus = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
+	if (hstatus != RTW_HAL_STATUS_SUCCESS) {
+		PHL_ERR("%s : check proxy done fail fw_ret(%u)\n", __func__, fw_ret);
+		hstatus = RTW_HAL_STATUS_FAILURE;
+		goto exit;
+	}
+
+exit:
+	return hstatus;
+}
+#endif /* CONFIG_PHL_APF */
 #endif /* CONFIG_WOWLAN */
 
 #define MAX_POLLING_FW_STS_TIME 100 /* ms */
@@ -10214,6 +10308,11 @@ u32 rtw_hal_mac_process_c2h(void *hal, struct rtw_c2h_info *c2h, struct c2h_evt_
 		_hal_mac_process_usr_tx_rpt(hal, &c2h_rpt.u.usr_tx_rpt);
 		break;
 #endif /*CONFIG_PHL_CUSTOM_FRAME_STAT*/
+#ifdef CONFIG_PHL_APF_DBG
+	case MSG_EVT_APF_RPT_DONE:
+		PHL_INFO("[APFDBG] %s() MSG_EVT_APF_RPT_DONE\n", __func__);
+		break;
+#endif
 	}
 exit:
 	return retid;
@@ -10553,7 +10652,7 @@ rtw_hal_mac_write_log_efuse_bt_map(struct rtw_hal_com_t *hal_com,
 	info.efuse_mask = tmp_mask;
 	info.efuse_mask_size= mask_size;
 
-	if (1) {
+	if (mac->hw_info->chip_id == MAC_AX_CHIP_ID_8852BT) {
 		if (mac->ops->pg_efuse_by_block_bt(mac,
 						&info,
 						MAC_AX_EFUSE_R_DRV,
@@ -10566,16 +10665,16 @@ rtw_hal_mac_write_log_efuse_bt_map(struct rtw_hal_com_t *hal_com,
 		}
 
 	} else {
-	if (mac->ops->pg_efuse_by_map_bt(mac,
-					&info,
-					MAC_AX_EFUSE_R_DRV) != MACSUCCESS) {
-		PHL_INFO("%s: BT PG Fail!\n", __FUNCTION__);
-		status = RTW_HAL_STATUS_EFUSE_PG_FAIL;
-	}
-	else {
-		PHL_INFO("%s: BT PG ok!\n", __FUNCTION__);
-		status = RTW_HAL_STATUS_SUCCESS;
-	}
+		if (mac->ops->pg_efuse_by_map_bt(mac,
+						&info,
+						MAC_AX_EFUSE_R_DRV) != MACSUCCESS) {
+			PHL_INFO("%s: BT PG Fail!\n", __FUNCTION__);
+			status = RTW_HAL_STATUS_EFUSE_PG_FAIL;
+		}
+		else {
+			PHL_INFO("%s: BT PG ok!\n", __FUNCTION__);
+			status = RTW_HAL_STATUS_SUCCESS;
+		}
 	}
 	_os_mem_free(hal_com->drv_priv, tmp_map, map_size);
 	_os_mem_free(hal_com->drv_priv, tmp_mask, mask_size);
@@ -10597,28 +10696,26 @@ rtw_hal_mac_read_log_efuse_bt_map(struct rtw_hal_com_t *hal_com, u8 *map, u32 si
 	struct hal_info_t *hal_info = hal_com->hal_priv;
 	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
 
-	if (1) {
-			if (mac->ops->dump_log_block_bt(mac,
-							MAC_AX_EFUSE_PARSER_MAP,
-							MAC_AX_EFUSE_R_DRV,
-							map,
-							0x0,
-							size)!= MACSUCCESS) {
-				PHL_INFO("%s: Dump bt logical efuse fail!\n", __FUNCTION__);
-				return RTW_HAL_STATUS_FAILURE;
-			}
-	
+	if (hal_com->chip_id == CHIP_WIFI6_8852BT) {
+		if (mac->ops->dump_log_block_bt(mac,
+						MAC_AX_EFUSE_PARSER_MAP,
+						MAC_AX_EFUSE_R_DRV,
+						map,
+						0x0,
+						size)!= MACSUCCESS) {
+			PHL_INFO("%s: Dump bt logical efuse fail!\n", __FUNCTION__);
+			return RTW_HAL_STATUS_FAILURE;
+		}
 	} else {
-	if (mac->ops->dump_log_efuse_bt(mac,
-			MAC_AX_EFUSE_PARSER_MAP,
-			MAC_AX_EFUSE_R_DRV,
-			map
-			) != MACSUCCESS) {
-		PHL_INFO("%s: Dump bt logical efuse fail!\n", __FUNCTION__);
-		return RTW_HAL_STATUS_FAILURE;
+		if (mac->ops->dump_log_efuse_bt(mac,
+				MAC_AX_EFUSE_PARSER_MAP,
+				MAC_AX_EFUSE_R_DRV,
+				map
+				) != MACSUCCESS) {
+			PHL_INFO("%s: Dump bt logical efuse fail!\n", __FUNCTION__);
+			return RTW_HAL_STATUS_FAILURE;
+		}
 	}
-	}
-	
 
 	PHL_INFO("%s: Dump bt logical efuse ok!\n", __FUNCTION__);
 	return RTW_HAL_STATUS_SUCCESS;

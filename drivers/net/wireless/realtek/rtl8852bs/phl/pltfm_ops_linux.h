@@ -738,7 +738,12 @@ static __inline u8 _os_thread_init(	void *drv_priv, _os_thread *thread,
 					const char namefmt[])
 {
 	RST_THREAD_STATUS(thread);
+#ifdef CONFIG_PHL_CPU_BALANCE_THREAD
+			thread->thread_handler = rtw_thread_cpu_start(call_back_func, context, namefmt, thread->cpu_id, thread->en_assign_cpuid);
+#else
 	thread->thread_handler = rtw_thread_start(call_back_func, context, namefmt);
+#endif /*CONFIG_PHL_CPU_BALANCE_THREAD*/
+
 	if (thread->thread_handler) {
 		SET_THREAD_STATUS(thread, THREAD_STATUS_STARTED);
 		return RTW_PHL_STATUS_SUCCESS;

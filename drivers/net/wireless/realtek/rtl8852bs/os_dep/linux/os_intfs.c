@@ -50,17 +50,10 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(pnetdev);
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct sockaddr *sa = (struct sockaddr *)addr;
-	int ret = -1;
-	struct _ADAPTER_LINK *adapter_link;
-	u8 lidx;
+	int ret = -EPERM;
+	u8 result = _FAIL;
+	bool cfg_hw = false;
 
-	/* only the net_device is in down state to permit modifying mac addr */
-	if ((pnetdev->flags & IFF_UP) == _TRUE) {
-		RTW_INFO(FUNC_ADPT_FMT": The net_device's is not in down state\n"
-			 , FUNC_ADPT_ARG(padapter));
-
-		return ret;
-	}
 
 	/* if the net_device is linked, it's not permit to modify mac addr */
 	if (check_fwstate(pmlmepriv, WIFI_UNDER_LINKING) ||
@@ -80,29 +73,22 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 		return ret;
 	}
 
-	_rtw_memcpy(adapter_mac_addr(padapter), sa->sa_data, ETH_ALEN); /* set mac addr to adapter */
-	dev_addr_mod(pnetdev, 0, sa->sa_data, ETH_ALEN);
-
-	/* Since the net_device is in down state, there is no wrole at this moment.
-	 * The new mac address will be set to hw when changing the net_device to up state.
-	 */
-
-	RTW_INFO(FUNC_ADPT_FMT": Set Mac Addr to "MAC_FMT" Successfully\n"
-		 , FUNC_ADPT_ARG(padapter), MAC_ARG(sa->sa_data));
-
-	 /* sync mac addr to adapter link */
-	for (lidx = 0; lidx < padapter->adapter_link_num; lidx++) {
-		adapter_link = GET_LINK(padapter, lidx);
-		_rtw_memcpy(adapter_link->mac_addr, sa->sa_data, ETH_ALEN);
-
-		/* offset for adapter_link mac-addr */
-		adapter_link->mac_addr[ETH_ALEN - 1] += lidx;
-
-		RTW_INFO(FUNC_ADPT_FMT": Set adapter link(id=%d) Mac Addr to "MAC_FMT" Successfully\n"
-		 , FUNC_ADPT_ARG(padapter), lidx, MAC_ARG(adapter_link->mac_addr));
+	if (pnetdev->flags & IFF_UP) {
+		RTW_INFO(FUNC_ADPT_FMT": The net_device's is not in down state\n"
+			 , FUNC_ADPT_ARG(padapter));
+		cfg_hw = true;
 	}
 
-	ret = 0;
+	result = rtw_set_mac_addr(padapter, sa->sa_data, cfg_hw, false);
+	if (result == _SUCCESS) {
+		dev_addr_mod(pnetdev, 0, sa->sa_data, ETH_ALEN);
+		RTW_INFO(FUNC_ADPT_FMT": Set Mac Addr to "MAC_FMT" Successfully\n"
+			 , FUNC_ADPT_ARG(padapter), MAC_ARG(sa->sa_data));
+		ret = 0;
+	} else {
+		RTW_ERR("%s: Set Mac Addr to "MAC_FMT" Failed\n", __func__, MAC_ARG(sa->sa_data));
+		ret = -EFAULT;
+	}
 
 	return ret;
 }
@@ -1358,6 +1344,7 @@ u8 rtw_init_drv_sw(_adapter *padapter)
 	padapter->rsvd_page_offset = 0;
 	padapter->rsvd_page_num = 0;
 
+	padapter->cur_tsf_cmd_enqueue = true;
 	padapter->data_fb = 0;
 	padapter->fix_rx_ampdu_accept = RX_AMPDU_ACCEPT_INVALID;
 	padapter->fix_rx_ampdu_size = RX_AMPDU_SIZE_INVALID;

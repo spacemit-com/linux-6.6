@@ -302,6 +302,154 @@ struct rtw_mdns_ofld_info {
 	struct rtw_mdns_ipv6_header mdns_ipv6_header;
 };
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_APF
+#ifdef CONFIG_APF_RAM_SIZE
+#define MAX_APF_RAM_SIZE CONFIG_APF_RAM_SIZE
+#define APF_RAM_FRAG_SIZE CONFIG_APF_RAM_FRAG_SIZE
+#else
+#warning "CONFIG_APF_RAM_SIZE is not defined, using default ram size 1024"
+#define MAX_APF_RAM_SIZE 1024
+#define APF_RAM_FRAG_SIZE 1024
+#endif /* CONFIG_APF_RAM_SIZE */
+
+#ifdef CONFIG_APF_TP_TH
+#define APF_ACTIVE_TP_TH CONFIG_APF_ACTIVE_TP_TH
+#else
+#define APF_ACTIVE_TP_TH 10
+#endif /* CONFIG_APF_TP_TH */
+
+
+#define APF_RAM_FRAG_NUM(__len, __size) (u32)(((__len)/(__size)) + ((__len)&((__size) - 1) ? 1 : 0))
+#define STR_FW_MODE(__apf_fw_mode) (__apf_fw_mode == RTW_FW_NIC ? "FW_NIC": \
+				    (__apf_fw_mode == RTW_FW_WOWLAN ? "FW_WOWLAN" : "Unknown"))
+
+enum phl_apf_force_en_state {
+	PHL_APF_FORCE_IGNORE = 0,
+	PHL_APF_FORCE_DIS,
+};
+
+enum phl_apf_cmd {
+	PHL_APF_CMD_DISABLE = 0,
+	PHL_APF_CMD_ENABLE  = 1,
+	PHL_APF_CMD_REPORT  = 2,
+	PHL_APF_CMD_STANDBY = 3,
+	PHL_APF_CMD_CLEAR   = 4,
+	PHL_APF_CMD_CHANGE  = 5,
+	/* used for drv */
+	PHL_APF_CMD_DRV,
+	/* used in watchdog for tp check */
+	PHL_APF_CMD_CHECK,
+	PHL_APF_CMD_MEDIA_STATUS_CHG,
+	/* used in suspend/resume process */
+	PHL_APF_CMD_CHG_FW,
+	PHL_APF_CMD_NONE    = 0xFF,
+};
+
+enum phl_apf_state {
+	PHL_APF_DISABLE    = 0,
+	PHL_APF_ENABLE     = 1,
+	PHL_APF_UNFINISHED = 2,
+	PHL_APF_STANDBY    = 3,
+};
+
+struct _apf_enum_map {
+	u32 val;
+	const char *str;
+};
+
+static const struct _apf_enum_map PHL_APF_CMD_MAP[] = {
+	{PHL_APF_CMD_DISABLE, "PHL_APF_CMD_DISABLE"},
+	{PHL_APF_CMD_ENABLE, "PHL_APF_CMD_ENABLE"},
+	{PHL_APF_CMD_REPORT, "PHL_APF_CMD_REPORT"},
+	{PHL_APF_CMD_STANDBY, "PHL_APF_CMD_STANDBY"},
+	{PHL_APF_CMD_CLEAR, "PHL_APF_CMD_CLEAR"},
+	{PHL_APF_CMD_CHANGE, "PHL_APF_CMD_CHANGE"},
+	{PHL_APF_CMD_DRV, "PHL_APF_CMD_DRV"},
+	{PHL_APF_CMD_CHECK, "PHL_APF_CMD_CHECK"},
+	{PHL_APF_CMD_MEDIA_STATUS_CHG, "PHL_APF_CMD_MEDIA_STATUS_CHG"},
+	{PHL_APF_CMD_CHG_FW, "PHL_APF_CMD_CHG_FW"},
+	{PHL_APF_CMD_NONE, "PHL_APF_CMD_NONE"},
+};
+#define PHL_APF_CMD_MAP_SIZE (sizeof(PHL_APF_CMD_MAP) / sizeof(PHL_APF_CMD_MAP[0]))
+
+static const struct _apf_enum_map PHL_APF_STATE_MAP[] = {
+	{PHL_APF_DISABLE, "PHL_APF_DISABLE"},
+	{PHL_APF_ENABLE, "PHL_APF_ENABLE"},
+	{PHL_APF_UNFINISHED, "PHL_APF_UNFINISHED"},
+	{PHL_APF_STANDBY, "PHL_APF_STANDBY"},
+};
+#define PHL_APF_STATE_MAP_SIZE (sizeof(PHL_APF_STATE_MAP) / sizeof(PHL_APF_STATE_MAP[0]))
+
+static inline const char* get_enum_str_from_map(int val, const struct _apf_enum_map *map, size_t map_size, const char *unknown_str) {
+	size_t i;
+	for (i = 0; i < map_size; ++i) {
+		if (map[i].val == val) {
+			return map[i].str;
+		}
+	}
+	return unknown_str;
+}
+
+static inline const char* _apf_cmd_to_str(enum phl_apf_cmd cmd) {
+	return get_enum_str_from_map(cmd, PHL_APF_CMD_MAP, PHL_APF_CMD_MAP_SIZE, "UNKNOWN_PHL_APF_CMD");
+}
+
+static inline const char* _apf_state_to_str(enum phl_apf_state state) {
+	return get_enum_str_from_map(state, PHL_APF_STATE_MAP, PHL_APF_STATE_MAP_SIZE, "UNKNOWN_PHL_APF_STATE");
+}
+
+struct _apf_ram {
+	u16 prog_len;
+	u8 buf[MAX_APF_RAM_SIZE];
+};
+struct phl_apf_cmd_blob {
+	enum phl_apf_cmd cmd;
+	enum rtw_fw_type fw_mode;
+	u8 mac_chg;
+	u8 is_screen_off;
+};
+struct phl_apf_info {
+	u8 apf_cmd;
+	enum phl_apf_state pre_apf_state;
+	enum phl_apf_state apf_state;
+	enum rtw_fw_type fw_mode;
+	struct _apf_ram ram;
+
+	u16 macid;
+	/* ==== pkt ofld related ====*/
+	/* dummy, this will be replace by apf prog */
+	u8 a1[MAC_ADDRESS_LENGTH];
+	/* sta mac addr */
+	u8 a2[MAC_ADDRESS_LENGTH];
+	/* bssid */
+	u8 a3[MAC_ADDRESS_LENGTH];
+	/* used for ram frag pkt ofld */
+	u8 ofld_idx;
+	/* used for fw chg, keep apf counter consistent */
+	u8 is_ram_ofld;
+	/* indicate pkt ofld is for mac hdr or not */
+	u8 mac_chg;
+	/* apf_ram_token[0] : mac hdr, apf_ram_token[1:7] : apf prog */
+	u32 apf_ram_token[8];
+	/* apf_ram_frag_pktid[0] : mac hdr, apf_ram_frag_pktid[1:7] : apf prog */
+	u8 apf_ram_frag_pktid[8];
+	/* security info for mac hdr */
+	u8 pairwise_sec_algo;
+	u8 group_sec_algo;
+	u8 hw_sec_iv;
+	u8 key_idx;
+	u8 protect_bit;
+	u8 sec_hdr_len;
+
+	/* DBG purpose */
+	enum phl_apf_force_en_state apf_force_dis;
+#ifdef	CONFIG_PHL_APF_DBG
+	u64 apf_cmd_seq;
+#endif
+
+};
+#endif /* CONFIG_PHL_APF */
+
 
 struct rtw_wow_wake_info {
 	/* core */
@@ -365,6 +513,25 @@ enum rtw_phl_status rtw_phl_cfg_wow_set_sw_gpio_mode(void *phl, struct rtw_wow_g
 enum rtw_phl_status rtw_phl_cfg_wow_sw_gpio_ctrl(void *phl, struct rtw_wow_gpio_info *info);
 void rtw_phl_wow_set_no_link_mode(void *phl, u8 no_link_mode);
 u32 rtw_phl_get_wow_fail_stat(void *phl);
+
+#ifdef CONFIG_PHL_APF
+static inline bool _is_state_impl(enum phl_apf_state state, const enum phl_apf_state *states, size_t count)
+{
+	size_t i;
+	for (i = 0; i < count; ++i) {
+		if (state == states[i])
+			return true;
+	}
+	return false;
+}
+#define IS_STATE(state, ...) _is_state_impl(state, (enum phl_apf_state[]){__VA_ARGS__}, sizeof((enum phl_apf_state[]){__VA_ARGS__}) / sizeof(enum phl_apf_state))
+#define IS_STATE_ERR(state, ...) _is_state_impl(state, (enum phl_apf_state[]){__VA_ARGS__}, sizeof((enum phl_apf_state[]){__VA_ARGS__}) / sizeof(enum phl_apf_state))
+
+enum rtw_phl_status rtw_phl_init_apf(void *phl, struct phl_apf_info *apf_info);
+enum rtw_phl_status rtw_phl_manipulate_apf(void *phl, u8 *param);
+enum rtw_phl_status rtw_phl_manipulate_apf_cmd(void *phl, struct phl_apf_cmd_blob *cmd_blob);
+#endif /* CONFIG_PHL_APF */
+
 #endif /* CONFIG_WOWLAN */
 
 #endif /* _PHL_WOW_DEF_H_ */

@@ -565,6 +565,8 @@ ssize_t proc_set_tx_amsdu(struct file *file, const char __user *buffer, size_t c
 int proc_get_tx_amsdu_rate(struct seq_file *m, void *v);
 ssize_t proc_set_tx_amsdu_rate(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 #endif
+int proc_get_tx_max_agg_time(struct seq_file *m, void *v);
+ssize_t proc_set_tx_max_agg_time(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 #endif /* CONFIG_80211N_HT */
 
 #ifdef CONFIG_80211AC_VHT
@@ -647,6 +649,13 @@ int proc_get_wow_pw_info(struct seq_file *m, void *v);
 ssize_t proc_set_wow_pw_info(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *pos, void *data);
 #endif
+
+#ifdef CONFIG_APF
+ssize_t proc_set_apf(struct file *file, const char __user *buffer,
+		     size_t count, loff_t *pos, void *data);
+int proc_get_apf(struct seq_file *m, void *v);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_P2P_WOWLAN
@@ -754,6 +763,9 @@ int proc_get_tx_ul_mu_disable(struct seq_file *m, void *v);
 ssize_t proc_set_tx_ul_mu_disable(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 int proc_get_vcs(struct seq_file *m, void *v);
 ssize_t proc_set_vcs(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
+int proc_get_cur_tsf(struct seq_file *m, void *v);
+int proc_get_cur_tsf_cmd_enqueue(struct seq_file *m, void *v);
+ssize_t proc_set_cur_tsf_cmd_enqueue(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 
 #ifdef CONFIG_RTW_CSI_CHANNEL_INFO
 int proc_get_csi_ch_info(struct seq_file *m, void *v);

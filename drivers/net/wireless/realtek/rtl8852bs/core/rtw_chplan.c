@@ -799,10 +799,9 @@ static void rtw_edcca_mode_update_by_regd_reqs(struct dvobj_priv *dvobj, bool re
 
 void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 {
-	struct registry_priv *regsty = dvobj_to_regsty(dvobj);
 	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
 
-	if (regsty->edcca_mode_sel == RTW_EDCCA_NORM) {
+	if (rfctl->edcca_mode_sel == RTW_EDCCA_NORM) {
 		/* force disable */
 		rfctl->edcca_mode_2g = RTW_EDCCA_NORM;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -812,7 +811,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_NORM;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_CS) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_CS) {
 		/* carrier sense */
 		rfctl->edcca_mode_2g = RTW_EDCCA_CS;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -822,7 +821,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_CS;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_ADAPT) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_ADAPT) {
 		/* adaptivity */
 		rfctl->edcca_mode_2g = RTW_EDCCA_ADAPT;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -832,7 +831,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_ADAPT;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_CBP) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_CBP) {
 		/* adaptivity */
 		rfctl->edcca_mode_2g = RTW_EDCCA_NORM;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -867,6 +866,13 @@ u8 rtw_get_edcca_mode(struct dvobj_priv *dvobj, enum band_type band)
 	#endif
 
 	return edcca_mode;
+}
+
+void rtw_edcca_mode_sel_msg(void *sel, struct dvobj_priv *dvobj)
+{
+	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
+
+	RTW_PRINT_SEL(sel, "RTW_EDCCA_%s\n", rtw_edcca_mode_sel_str(rfctl->edcca_mode_sel));
 }
 
 #if CONFIG_TXPWR_LIMIT
@@ -1334,7 +1340,34 @@ void rtw_get_chplan_worldwide(struct country_chplan *ent)
 {
 	_rtw_memcpy(ent, &world_wide_chplan, sizeof(*ent));
 }
+struct alpha2_alternate_t {
+	char alpha2[2];
+	char alt[2];
+};
 
+#define ALPHA2_ALT_ENT(_alpha2, _alt) {.alpha2 = _alpha2, .alt = _alt}
+
+static const struct alpha2_alternate_t alpha2_alt_map[] = {
+	ALPHA2_ALT_ENT("EU", "DE"),
+};
+
+static bool rtw_get_chplan_from_alpha2_alt(const char *code, struct country_chplan *ent)
+{
+	int i;
+	bool ret = false;
+
+	for (i = 0; i < ARRAY_SIZE(alpha2_alt_map); i++) {
+		if (code[0] == alpha2_alt_map[i].alpha2[0]
+			&& code[1] == alpha2_alt_map[i].alpha2[1]
+		) {
+			ret = regdb_ops.get_chplan_from_alpha2(alpha2_alt_map[i].alt, ent);
+			if (ret)
+				break;
+		}
+	}
+
+	return ret;
+}
 /*
 * rtw_get_chplan_from_country -
 * @country_code: string of country code
@@ -1348,7 +1381,10 @@ bool rtw_get_chplan_from_country(const char *country_code, struct country_chplan
 	const struct country_chplan *map = NULL;
 	u16 map_sz = 0;
 	int i;
+#else
+	bool ret;
 #endif
+
 	char code[2] = {alpha_to_upper(country_code[0]), alpha_to_upper(country_code[1])};
 
 #if defined(CONFIG_CUSTOMIZED_COUNTRY_CHPLAN_MAP) || RTW_DEF_MODULE_REGULATORY_CERT
@@ -1369,9 +1405,12 @@ bool rtw_get_chplan_from_country(const char *country_code, struct country_chplan
 
 	return false;
 #else
-	if (regdb_ops.get_chplan_from_alpha2)
-		return regdb_ops.get_chplan_from_alpha2(code, ent);
-	return false;
+	if (regdb_ops.get_chplan_from_alpha2) {
+		ret = regdb_ops.get_chplan_from_alpha2(code, ent);
+		if (!ret)
+			ret = rtw_get_chplan_from_alpha2_alt(code, ent);
+	}
+	return ret;
 #endif
 }
 
@@ -2585,6 +2624,22 @@ static void rtw_chplan_rtk_priv_req_prehdl_confs(struct rf_ctl_t *rfctl, struct 
 		confs->set_types &= ~BIT(CHPLAN_CONFS_BCN_HINT_VALID_MS); /* setting done here */
 	}
 
+	if (confs->set_types & BIT(CHPLAN_CONFS_EDCCA_MODE_SEL)) {
+		if (RTW_EDCCA_MODE_SEL_VALID(confs->edcca_mode_sel)
+			&& rfctl->edcca_mode_sel != confs->edcca_mode_sel
+		) {
+			rfctl->edcca_mode_sel = confs->edcca_mode_sel;
+			RTW_INFO("%s set edcca_mode_sel to %s\n", caller
+				, rtw_edcca_mode_sel_str(confs->edcca_mode_sel));
+			if (rfctl->edcca_mode_sel != RTW_EDCCA_AUTO) {
+				/* force edcca mode, not rely on regd reqs, update here */
+				rtw_edcca_mode_update(rfctl_to_dvobj(rfctl), false);
+				confs->set_types &= ~BIT(CHPLAN_CONFS_EDCCA_MODE_SEL); /* setting done here */
+			}
+		} else
+			confs->set_types &= ~BIT(CHPLAN_CONFS_EDCCA_MODE_SEL); /* setting done here */
+	}
+
 #ifdef CONFIG_80211D
 	#ifdef CONFIG_REGD_SRC_FROM_OS
 	if (RFCTL_REGD_SRC_FROM_OS(rfctl)) {
@@ -3690,6 +3745,7 @@ static const char *const chplan_confs_type_str[] = {
 	[CHPLAN_CONFS_INIT_REGD_ALWAYS_APPLY]	= "init_regd_always_apply",
 	[CHPLAN_CONFS_USER_REGD_ALWAYS_APPLY]	= "user_regd_always_apply",
 	[CHPLAN_CONFS_BCN_HINT_VALID_MS]	= "bcn_hint_valid_ms",
+	[CHPLAN_CONFS_EDCCA_MODE_SEL]		= "edcca_mode_sel",
 	[CHPLAN_CONFS_CIS_EN_MODE]		= "cis_en_mode",
 	[CHPLAN_CONFS_CIS_FLAGS]		= "cis_flags",
 	[CHPLAN_CONFS_CIS_EN_IFBMP]		= "cis_en_ifbmp",
@@ -3776,6 +3832,16 @@ static void rtw_parse_chplan_confs_type_arg_str(struct chplan_confs *confs, enum
 			if (sscanf(str, "%u", &ms) == 1) {
 				confs->set_types |= BIT(type);
 				confs->bcn_hint_valid_ms = ms;
+			}
+		}
+
+	} else if (type == CHPLAN_CONFS_EDCCA_MODE_SEL) {
+		if (strlen(str)) {
+			u8 mode;
+
+			if (sscanf(str, "%hhu", &mode) == 1) {
+				confs->set_types |= BIT(type);
+				confs->edcca_mode_sel = mode;
 			}
 		}
 
@@ -4029,6 +4095,7 @@ u8 rtw_get_chplan_hdl(_adapter *adapter, u8 *pbuf)
 	chplan->confs.init_regd_always_apply = rfctl->init_regd_always_apply;
 	chplan->confs.user_regd_always_apply = rfctl->user_regd_always_apply;
 	chplan->confs.bcn_hint_valid_ms = rfctl->bcn_hint_valid_ms;
+	chplan->confs.edcca_mode_sel = rfctl->edcca_mode_sel;
 #ifdef CONFIG_80211D
 	chplan->confs.cis_en_mode = rfctl->cis_en_mode;
 	chplan->confs.cis_flags = rfctl->cis_flags;
@@ -4557,6 +4624,7 @@ void dump_cur_chplan_confs(void *sel, struct rf_ctl_t *rfctl)
 	RTW_PRINT_SEL(sel, "init_regd_always_apply=%d\n", confs->init_regd_always_apply);
 	RTW_PRINT_SEL(sel, "user_regd_always_apply=%d\n", confs->user_regd_always_apply);
 	RTW_PRINT_SEL(sel, "bcn_hint_valid_ms=%u\n", confs->bcn_hint_valid_ms);
+	RTW_PRINT_SEL(sel, "edcca_mode_sel=%u\n", confs->edcca_mode_sel);
 #ifdef CONFIG_80211D
 	RTW_PRINT_SEL(sel, "cis_en_mode=%u\n", confs->cis_en_mode);
 	RTW_PRINT_SEL(sel, "cis_flags=0x%02x\n", confs->cis_flags);

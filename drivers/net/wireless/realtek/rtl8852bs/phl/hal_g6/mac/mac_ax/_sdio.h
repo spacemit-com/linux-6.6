@@ -118,6 +118,21 @@ enum sdio_tx_byte_cnt {
 	SDIO_TX_DUMMY_4_BYTE_CNT,
 };
 
+/**
+ * @enum sdio_hfc_sel
+ *
+ * @brief sdio_hfc_sel
+ *
+ * @var sdio_hfc_sel::SDIO_HFC_SEL_DATA
+ * SDIO flow control: data path.
+ * @var sdio_hfc_sel::SDIO_HFC_SEL_H2C
+ * SDIO flow control: H2C path.
+ */
+enum sdio_hfc_sel {
+	SDIO_HFC_SEL_DATA,
+	SDIO_HFC_SEL_H2C,
+};
+
 /*--------------------Define Struct-------------------------------------*/
 
 /**
@@ -375,6 +390,28 @@ u32 tx_cmd_addr_sdio(struct mac_ax_adapter *adapter,
  */
 
 /**
+ * @brief set_sd_reset_sdio
+ *
+ * @param *adapter
+ * @param *intf_info
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 set_sd_reset_sdio(struct mac_ax_adapter *adapter,
+		      struct mac_ax_intf_info *intf_info);
+/**
+ * @}
+ * @}
+ */
+
+/**
+ * @addtogroup HCI
+ * @{
+ * @addtogroup SDIO
+ * @{
+ */
+
+/**
  * @brief sdio_init
  *
  * @param *adapter
@@ -584,6 +621,27 @@ u32 sdio_get_txagg_num(struct mac_ax_adapter *adapter, u8 band);
  * @retval u32
  */
 u32 sdio_get_rx_state(struct mac_ax_adapter *adapter, u32 *val);
+/**
+ * @}
+ * @}
+ */
+
+/**
+ * @addtogroup HCI
+ * @{
+ * @addtogroup SDIO
+ * @{
+ */
+
+/**
+ * @brief sdio_pre_init
+ *
+ * @param *adapter
+ * @param *param
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 sdio_pre_init(struct mac_ax_adapter *adapter, void *param);
 /**
  * @}
  * @}

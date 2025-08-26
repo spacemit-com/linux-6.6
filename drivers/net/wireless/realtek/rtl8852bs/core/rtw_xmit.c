@@ -7438,7 +7438,7 @@ void dbg_dump_txreq_mdata(struct rtw_t_meta_data *mdata, const char *func)
 #endif /*DBG_DUMP_TX_COUNTER*/
 }
 
-void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
+u8 fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 {
 	struct rtw_xmit_req *txreq = pxframe->phl_txreq;
 	struct sta_info *psta = pxframe->attrib.psta;
@@ -7501,6 +7501,8 @@ void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 		if (padapter->dvobj->phl_com->dev_cap.sec_cap.hw_form_hdr &&
 		    mdata->sec_type != RTW_ENC_WAPI && mdata->hw_sec_iv == 0) {
 			mdata->sec_keyid = pxframe->attrib.key_idx;
+			if (!psta)
+				return _FAIL;
 			/* Fill PN of IV */
 			for (idx = 0; idx < 6; idx++)
 				mdata->iv[idx] = (psta->dot11txpn.val >> 8 * idx) & 0xff;
@@ -7524,6 +7526,8 @@ void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 		mdata->ampdu_en = 1;
 		mdata->bk = 0;
 		mdata->ampdu_density = pxframe->attrib.ampdu_spacing;
+		if (!psta->phl_sta)
+			return _FAIL;
 		mdata->max_agg_num = psta->phl_sta->asoc_cap.num_ampdu;
 	} else {
 		mdata->ampdu_en = 0;
@@ -7700,6 +7704,7 @@ void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 			txreq++;
 		}
 	}
+	return _SUCCESS;
 
 }
 
@@ -7733,9 +7738,10 @@ u8 core_wlan_fill_txreq_pre(_adapter *padapter, struct xmit_frame *pxframe)
 	return _SUCCESS;
 }
 
-void core_wlan_fill_txreq_post(_adapter *padapter, struct xmit_frame *pxframe)
+u8 core_wlan_fill_txreq_post(_adapter *padapter, struct xmit_frame *pxframe)
 {
-	fill_txreq_mdata(padapter, pxframe);
+	if (fill_txreq_mdata(padapter, pxframe) == _FAIL)
+		return _FAIL;
 	fill_txreq_others(padapter, pxframe);
 
 #ifdef CONFIG_PCI_HCI
@@ -7745,11 +7751,12 @@ void core_wlan_fill_txreq_post(_adapter *padapter, struct xmit_frame *pxframe)
 	fill_txreq_ack_txfb(padapter, pxframe);
 #endif
 #endif
-
+	return _SUCCESS;
 }
 
-void core_wlan_fill_head(_adapter *padapter, struct xmit_frame *pxframe)
+s32 core_wlan_fill_head(_adapter *padapter, struct xmit_frame *pxframe)
 {
+	sint res = _SUCCESS;
 	u32 idx = 0;
 	if (pxframe->xftype == RTW_TX_OS) {
 		for (idx = 0; idx < pxframe->attrib.nr_frags; idx++) {
@@ -7760,7 +7767,8 @@ void core_wlan_fill_head(_adapter *padapter, struct xmit_frame *pxframe)
 				continue;
 			}
 
-			rtw_make_wlanhdr(padapter, pwlanhdr, &pxframe->attrib); //rtw_core_make_wlanhdr(padapter, pwlanhdr, pxframe);
+			if ( _FAIL == rtw_make_wlanhdr(padapter, pwlanhdr, &pxframe->attrib)) //rtw_core_make_wlanhdr(padapter, pwlanhdr, pxframe);
+				return _FAIL;
 
 			if (idx == (pxframe->attrib.nr_frags - 1))
 				ClearMFrag(pwlanhdr);
@@ -7793,6 +7801,7 @@ void core_wlan_fill_head(_adapter *padapter, struct xmit_frame *pxframe)
 
 		}
 	}
+	return res;
 }
 
 
@@ -8112,7 +8121,10 @@ s32 core_tx_prepare_phl(_adapter *padapter, struct xmit_frame *pxframe)
 		return FAIL;
 
 	if (pxframe->xftype == RTW_TX_OS) {
-		core_wlan_fill_head(padapter, pxframe);
+		if (core_wlan_fill_head(padapter, pxframe) == _FAIL) {
+			RTW_ERR("core_wlan_fill_head FAIL\n");
+			return FAIL;
+		}
 		if (core_wlan_fill_tkip_mic(padapter, pxframe) == _FAIL) {
 			RTW_ERR("core_wlan_fill_tkip_mic FAIL\n");
 			return FAIL;
@@ -8121,7 +8133,8 @@ s32 core_tx_prepare_phl(_adapter *padapter, struct xmit_frame *pxframe)
 	core_wlan_fill_tail(padapter, pxframe);
 	core_wlan_sw_encrypt(padapter, pxframe);
 
-	core_wlan_fill_txreq_post(padapter, pxframe);
+	if (core_wlan_fill_txreq_post(padapter, pxframe) == _FAIL)
+		return FAIL;
 
 	return SUCCESS;
 }

@@ -498,6 +498,12 @@ _phl_cmd_general_post_phase_msg_hdlr(struct phl_info_t *phl_info, void *dispr,
 	break;
 #endif
 
+#ifdef CONFIG_PHL_APF
+	case MSG_EVT_APF_CTRL:
+		psts = rtw_phl_manipulate_apf(phl_info, phl_cmd->buf);
+		break;
+#endif
+
 	default:
 		psts = RTW_PHL_STATUS_SUCCESS;
 	break;

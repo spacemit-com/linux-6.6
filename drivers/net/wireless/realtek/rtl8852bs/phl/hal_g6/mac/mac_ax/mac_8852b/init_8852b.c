@@ -98,9 +98,9 @@ static struct mac_ax_intf_ops mac8852b_sdio_ops = {
 	reg_write32_sdio, /* reg_write32 */
 	tx_allow_sdio, /* tx_allow_sdio */
 	tx_cmd_addr_sdio, /* tx_cmd_addr_sdio */
-	sdio_pre_init_8852b, /* intf_pre_init */
+	sdio_pre_init, /* intf_pre_init */
 	sdio_init, /* intf_init */
-	sdio_deinit, /* intf_init */
+	sdio_deinit, /* intf_deinit */
 	reg_read_n_sdio, /* reg_read_n_sdio */
 	NULL, /*get_bulkout_id*/
 	ltr_set_sdio, /* ltr_set_pcie */
@@ -725,6 +725,7 @@ static struct mac_ax_ops mac8852b_ops = {
 	mac_proxy_llmnr,
 	mac_mdns_ofld,
 	mac_apf_ofld,
+	mac_apf_ofld_ctrl,
 	mac_apf_get_report,
 	mac_check_proxy_done,
 #endif /* MAC_FEAT_WOWLAN */
@@ -867,7 +868,7 @@ static struct mac_ax_adapter mac_8852b_adapter =  {
 	{NULL, NULL, NULL, 0, 0, 0, 0}, /* write_ofld_info */
 	{NULL}, /* efuse_ofld_info */
 	{NULL, NULL, 0, 0, 0, 0}, /* conf_ofld_info */
-	{PKT_OFLD_OP_MAX, PKT_OFLD_MAX_COUNT, 0, {0}}, /* pkt_ofld_info */
+	{0, PKT_OFLD_MAX_COUNT - 1, 0, {0}, {0}, PKT_OFLD_OP_MAX, PKT_OFLD_NOT_EXISTS_ID}, /* pkt_ofld_info */
 	{0, 0, 0, NULL}, /* pkt_ofld_pkt */
 	{NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0}, /* cmd_ofld_info */
 #if MAC_FEAT_MCC

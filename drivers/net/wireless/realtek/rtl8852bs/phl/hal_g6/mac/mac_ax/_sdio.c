@@ -16,6 +16,16 @@
 #include "mac_priv.h"
 
 #if MAC_AX_SDIO_SUPPORT
+
+/* 3.25KB */
+#define MAC_AX_SDIO_CHECK_ENOUGH_3P25KB 52
+#define MAC_AX_SDIO_CHECK_ENOUGH_0KB 0
+#if MAC_AX_RTK_WARD_TXEN_DATA_PLE_FULL
+#define MAC_AX_SDIO_CHECK_ENOUGH_SIZE MAC_AX_SDIO_CHECK_ENOUGH_3P25KB
+#else
+#define MAC_AX_SDIO_CHECK_ENOUGH_SIZE MAC_AX_SDIO_CHECK_ENOUGH_0KB
+#endif
+
 static struct mac_sdio_tbl sdio_tbl;
 
 static u8 _patch_reg_sdio(struct mac_ax_adapter *adapter, u32 adr);
@@ -433,6 +443,27 @@ u32 tx_cmd_addr_sdio(struct mac_ax_adapter *adapter,
 	return MACSUCCESS;
 }
 
+u32 set_sd_reset_sdio(struct mac_ax_adapter *adapter,
+		      struct mac_ax_intf_info *intf_info)
+{
+	u32 ret = MACSUCCESS;
+	u32 val32;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	struct mac_ax_priv_ops *p_ops = adapter_to_priv_ops(adapter);
+	enum mac_ax_sdio_func_ctrl sd_reset = intf_info->sdio_intf_info.sd_reset;
+
+	if (sd_reset == MAC_AX_SDIO_DISABLE) {
+		/* 0x04[15] = 0 */
+		val32 = MAC_REG_R32(R_AX_SYS_PW_CTRL);
+		MAC_REG_W32(R_AX_SYS_PW_CTRL, val32 & ~B_AX_APDM_HPDN);
+	} else if (sd_reset == MAC_AX_SDIO_ENABLE) {
+		/* 0x04[15] = 1 */
+		val32 = MAC_REG_R32(R_AX_SYS_PW_CTRL);
+		MAC_REG_W32(R_AX_SYS_PW_CTRL, val32 | B_AX_APDM_HPDN);
+	}
+	return ret;
+}
+
 u32 sdio_init(struct mac_ax_adapter *adapter, void *param)
 {
 	u32 val32;
@@ -751,7 +782,8 @@ u32 chk_fs_enuf(struct mac_ax_adapter *adapter,
 
 	if (wde_aval < tx_info->wde_rqd_num)
 		return MACHFSWDENOTNUF;
-	if (pub_info->wp_aval < tx_info->ple_rqd_num)
+	/* patch check enough 0 or 3.25KB size */
+	if (pub_info->wp_aval < (tx_info->ple_rqd_num + MAC_AX_SDIO_CHECK_ENOUGH_SIZE))
 		return MACHFSPLENOTNUF;
 	if (pub_info->wp_aval <= ple_thrd && wde_use > wde_min)
 		return MACHFSPLENOTNUF;
@@ -804,7 +836,7 @@ u32 tx_allow_data_ch(struct mac_ax_adapter *adapter,
 		else {
 			rtw_usleep_os(200);
 		}
-		p_ops->ud_fs(adapter);
+		p_ops->ud_fs(adapter, SDIO_HFC_SEL_DATA);
 		cnt--;
 	} while (cnt);
 
@@ -834,7 +866,7 @@ u32 tx_allow_fwcmd_ch(struct mac_ax_adapter *adapter,
 		else {
 			rtw_usleep_os(200);
 		}
-		p_ops->ud_fs(adapter);
+		p_ops->ud_fs(adapter, SDIO_HFC_SEL_H2C);
 		cnt--;
 	} while (cnt);
 
@@ -852,6 +884,34 @@ u32 sdio_get_txagg_num(struct mac_ax_adapter *adapter, u8 band)
 u32 sdio_get_rx_state(struct mac_ax_adapter *adapter, u32 *val)
 {
 		return MACNOTSUP;
+}
+
+u32 sdio_pre_init(struct mac_ax_adapter *adapter, void *param)
+{
+	u16 val16;
+	u32 val32;
+	u32 ret = MACSUCCESS;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	struct mac_ax_intf_info *intf_info = (struct mac_ax_intf_info *)param;
+
+	val32 = MAC_REG_R32(R_AX_HCI_OPT_CTRL);
+	MAC_REG_W32(R_AX_HCI_OPT_CTRL, val32 | B_AX_SDIO_DATA_PAD_SMT);
+
+	val32 = MAC_REG_R32(R_AX_SDIO_TX_CTRL) & ~(B_AX_CMD53_TX_FORMAT);
+	MAC_REG_W32(R_AX_SDIO_TX_CTRL, val32 | B_AX_RXINT_READ_MASK_DIS);
+	adapter->sdio_info.tx_mode = MAC_AX_SDIO_TX_MODE_AGG;
+	adapter->sdio_info.tx_seq = 1;
+
+	val16 = MAC_REG_R16(R_AX_SDIO_BUS_CTRL);
+	MAC_REG_W16(R_AX_SDIO_BUS_CTRL, val16 | B_AX_EN_RPT_TXCRC);
+
+	ret = set_sd_reset_sdio(adapter, intf_info);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("[ERR]set sdio reset %d\n", ret);
+		return ret;
+	}
+
+	return MACSUCCESS;
 }
 
 u32 dbcc_hci_ctrl_sdio(struct mac_ax_adapter *adapter,

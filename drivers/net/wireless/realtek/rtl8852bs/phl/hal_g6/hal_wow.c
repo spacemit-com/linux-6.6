@@ -587,4 +587,45 @@ enum rtw_hal_status rtw_hal_wow_dbg_dump(void *hal)
 	return hal_stats;
 }
 
+#ifdef CONFIG_PHL_APF
+enum rtw_hal_status
+rtw_hal_init_apf(void *hal, struct phl_apf_info *info)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct rtw_hal_mac_apf_ctrl *mac_apf_ctrl = &mac->apf_info;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	/* hook phl & mac */
+	mac_apf_ctrl->ptr_apf_ram_buffer = (u32*)(info->ram.buf);
+	mac_apf_ctrl->ptr_status = (u32*)(&(info->apf_state));
+	return hstatus;
+}
+
+enum rtw_hal_status
+rtw_hal_ctrl_apf(void *hal, struct phl_apf_info *info) {
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	u8 i, polling_cnt = 50, polling_delay = 5;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	hstatus = rtw_hal_mac_ctrl_apf(hal_info, info);
+	if (hstatus != RTW_HAL_STATUS_SUCCESS) {
+		PHL_ERR("%s() hstatus(%u)\n", __func__, hstatus);
+		goto exit;
+	}
+
+	for (i = 0; i < polling_cnt; i++) {
+		if (info->apf_state != PHL_APF_UNFINISHED) {
+			goto exit;
+		}
+		else {
+			_os_sleep_ms(NULL, polling_delay);
+		}
+	}
+	hstatus = RTW_HAL_STATUS_TIMEOUT;
+	PHL_ERR("%s() polling timeout!!\n", __func__);
+exit:
+	return hstatus;
+}
+#endif /* CONFIG_PHL_APF */
 #endif /* CONFIG_WOWLAN */

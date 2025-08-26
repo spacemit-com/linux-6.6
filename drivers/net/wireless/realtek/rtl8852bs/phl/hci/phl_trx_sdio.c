@@ -483,6 +483,16 @@ static int phl_tx_sdio_thrd_hdl(void *context)
 	enum rtw_hal_status hstatus;
 	enum phl_tx_status tx_status;
 
+	#ifdef RTW_XMIT_THREAD_HIGH_PRIORITY
+	#ifdef PLATFORM_LINUX
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+		sched_set_fifo_low(current);
+	#else
+		struct sched_param param = { .sched_priority = 1 };
+		sched_setscheduler(current, SCHED_FIFO, &param);
+	#endif
+	#endif /* PLATFORM_LINUX */
+	#endif /*RTW_XMIT_THREAD_HIGH_PRIORITY*/
 
 	PHL_INFO("SDIO: tx thread start\n");
 
@@ -518,6 +528,7 @@ check_stop:
 				txbuf->retry++;
 				enqueue_busy_txbuf_to_head(phl, tx_pool, txbuf);
 				/* Todo: What to do when TX FIFO not ready? */
+				_os_sleep_us(drv, 1);
 				goto check_stop;
 			}
 
@@ -609,6 +620,17 @@ static void phl_tx_callback_sdio(void *context)
 	bool rsrc;
 #endif /* SDIO_TX_THREAD */
 
+#ifdef RTW_XMIT_THREAD_CB_HIGH_PRIORITY
+#ifdef PLATFORM_LINUX
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+	sched_set_fifo_low(current);
+#else
+		struct sched_param param = { .sched_priority = 1 };
+
+		sched_setscheduler(current, SCHED_FIFO, &param);
+#endif
+#endif /* PLATFORM_LINUX */
+#endif /* RTW_XMIT_THREAD_CB_HIGH_PRIORITY */
 
 	phl_handler = (struct rtw_phl_handler *)phl_container_of(context,
 						     struct rtw_phl_handler,
@@ -1012,6 +1034,18 @@ static void phl_rx_callback_sdio(void *context)
 	struct phl_info_t *phl_info;
 	bool rx_pause = false;
 
+	#ifdef RTW_RECV_THREAD_HIGH_PRIORITY
+	#ifdef PLATFORM_LINUX
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+	sched_set_fifo_low(current);
+	#else
+		struct sched_param param = { .sched_priority = 1 };
+
+	sched_setscheduler(current, SCHED_FIFO, &param);
+	#endif
+	#endif /* PLATFORM_LINUX */
+	#endif /*RTW_RECV_THREAD_HIGH_PRIORITY*/
+
 	phl_handler = (struct rtw_phl_handler *)phl_container_of(context,
 						     struct rtw_phl_handler,
 						     os_handler);
@@ -1064,6 +1098,15 @@ static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)
 	_os_strncpy(tx_handler->cb_name, tx_hdl_cb_name,
 		    (_os_strlen((u8*)tx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
 			RTW_PHL_HANDLER_CB_NAME_LEN : _os_strlen((u8*)tx_hdl_cb_name));
+#ifdef CONFIG_PHL_CPU_BALANCE_THREAD
+#ifdef CPU_ID_TX_CB
+	tx_handler->os_handler.u.thread.en_assign_cpuid = _TRUE;
+	tx_handler->os_handler.u.thread.cpu_id = CPU_ID_TX_CB;
+
+#else
+	tx_handler->os_handler.u.thread.en_assign_cpuid = _FALSE;
+#endif /*CPU_ID_TX_CB*/
+#endif /*CONFIG_PHL_CPU_BALANCE_THREAD*/
 #else
 	tx_handler->type = RTW_PHL_HANDLER_PRIO_LOW;
 #endif
@@ -1079,6 +1122,14 @@ static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)
 	_os_strncpy(rx_handler->cb_name, rx_hdl_cb_name,
 		   (_os_strlen((u8*)rx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
 			RTW_PHL_HANDLER_CB_NAME_LEN : _os_strlen((u8*)rx_hdl_cb_name));
+#ifdef CONFIG_PHL_CPU_BALANCE_THREAD
+#ifdef CPU_ID_RX_CB
+	rx_handler->os_handler.u.thread.en_assign_cpuid = _TRUE;
+	rx_handler->os_handler.u.thread.cpu_id = CPU_ID_RX_CB;
+#else
+	rx_handler->os_handler.u.thread.en_assign_cpuid = _FALSE;
+#endif /*CPU_ID_RX_CB*/
+#endif /*CONFIG_PHL_CPU_BALANCE_THREAD*/
 #else
 	rx_handler->type = RTW_PHL_HANDLER_PRIO_LOW;
 #endif
@@ -1105,6 +1156,7 @@ static enum rtw_phl_status phl_recv_rxfifo_sdio(struct phl_info_t *phl)
 		rxbuf = dequeue_rxbuf(phl, &rx_pool->idle_rxbuf_list);
 		if (!rxbuf) {
 			pstatus = RTW_PHL_STATUS_RESOURCE;
+			rtw_phl_start_rx_process(phl);
 			break;
 		}
 
@@ -1361,6 +1413,15 @@ static enum rtw_phl_status phl_trx_init_sdio(struct phl_info_t *phl_info)
 		phl_schedule_handler(phl_info->phl_com, &phl_info->phl_tx_handler);
 
 #ifdef SDIO_TX_THREAD
+#ifdef CONFIG_PHL_CPU_BALANCE_THREAD
+#ifdef CPU_ID_TX
+		hci->tx_thrd.en_assign_cpuid = _TRUE;
+		hci->tx_thrd.cpu_id = CPU_ID_TX;
+#else
+		hci->tx_thrd->en_assign_cpuid =  _FALSE;
+#endif /*CPU_ID_TX*/
+#endif /*CONFIG_PHL_CPU_BALANCE_THREAD*/
+
 		_os_sema_init(drv, &hci->tx_thrd_sema, 0);
 		if (RTW_PHL_STATUS_SUCCESS != _os_thread_init(drv, &hci->tx_thrd, phl_tx_sdio_thrd_hdl,
 				phl_info, "rtw_sdio_tx")) {

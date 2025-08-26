@@ -3237,6 +3237,13 @@ u32 mac_sram_dbg_write(struct mac_ax_adapter *adapter, u32 offset,
 		return MACIOERRINSEC;
 	}
 
+	if (sel == AXIDMA_SEL) {
+		if(!(MAC_REG_R32(R_AX_PLATFORM_ENABLE) & B_AX_AXIDMA_EN)) {
+			PLTFM_MSG_ERR("[ERR]ind accees fail AXIDMA is disable\n");
+			return MACIOERRPWR;
+		}
+	}
+
 	switch (sel) {
 	case CPU_LOCAL_SEL:
 		reg_base = CPU_LOCAL_BASE_ADDR + offset;
@@ -3324,6 +3331,13 @@ u32 mac_sram_dbg_read(struct mac_ax_adapter *adapter, u32 offset, u32 *val,
 	if (adapter->fw_info.is_sec_ic) {
 		PLTFM_MSG_ERR("[ERR]security mode ind accees\n");
 		return MACIOERRINSEC;
+	}
+
+	if (sel == AXIDMA_SEL) {
+		if(!(MAC_REG_R32(R_AX_PLATFORM_ENABLE) & B_AX_AXIDMA_EN)) {
+			PLTFM_MSG_ERR("[ERR]ind accees fail AXIDMA is disable\n");
+			return MACIOERRPWR;
+		}
 	}
 
 	switch (sel) {
@@ -4421,6 +4435,13 @@ u32 mac_h2c_path_check(struct mac_ax_adapter *adapter)
 {
 	u32 ret;
 	u32 poll_cnt;
+	u32 timeout;
+	if (adapter->env_info.intf == MAC_AX_INTF_USB)
+		timeout = H2C_USB_PATHCHECK_TIMEOUT_MS;
+	else if (adapter->env_info.intf == MAC_AX_INTF_SDIO)
+		timeout = H2C_SDIO_PATHCHECK_TIMEOUT_MS;
+	else
+		timeout = H2C_PATHCHECK_TIMEOUT_MS;
 
 	adapter->sm.h2c_lb_st = MAC_AX_H2C_LB_PROC;
 	ret = mac_fwcmd_lb(adapter, 0x20, 1);
@@ -4429,7 +4450,7 @@ u32 mac_h2c_path_check(struct mac_ax_adapter *adapter)
 		return ret;
 	}
 
-	for (poll_cnt = H2C_PATHCHECK_TIMEOUT_MS; poll_cnt > 0; poll_cnt--) {
+	for (poll_cnt = timeout; poll_cnt > 0; poll_cnt--) {
 		if (adapter->sm.h2c_lb_st == MAC_AX_H2C_LB_IDLE)
 			break;
 		PLTFM_DELAY_MS(1);
@@ -4440,4 +4461,105 @@ u32 mac_h2c_path_check(struct mac_ax_adapter *adapter)
 	return MACSUCCESS;
 }
 
+#if MAC_AX_SDIO_SUPPORT
+u32 mac_sdio_reg_dump(struct mac_ax_adapter *adapter)
+{
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	struct mac_ax_priv_ops *p_ops = adapter_to_priv_ops(adapter);
+	u32 j, val32_1, val32_2, val32_3, val32_4;
+	u8 val8;
+	u32 ret;
+
+	PLTFM_MSG_ALWAYS("dispatcher Registers:\n");
+	j=0x8804;
+	val32_1 = MAC_REG_R32(j);
+	val32_2 = MAC_REG_R32(j + 4);
+	val32_3 = MAC_REG_R32(j + 8);
+	PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x\n",
+			 j, val32_1, val32_2, val32_3);
+
+	j=0x8880;
+	val32_1 = MAC_REG_R32(j);
+	val32_2 = MAC_REG_R32(j + 4);
+	val32_3 = MAC_REG_R32(j + 8);
+	val32_4 = MAC_REG_R32(j + 0xc);
+	PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x %08x\n",
+			 j, val32_1, val32_2, val32_3, val32_4);
+
+	j=0x8890;
+	val32_1 = MAC_REG_R32(j);
+	val32_2 = MAC_REG_R32(j + 4);
+	val32_3 = MAC_REG_R32(j + 8);
+	val32_4 = MAC_REG_R32(j + 0xc);
+	PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x %08x\n",
+			 j, val32_1, val32_2, val32_3, val32_4);
+
+	j=0x88a0;
+	val32_1 = MAC_REG_R32(j);
+	val32_2 = MAC_REG_R32(j + 4);
+	val32_3 = MAC_REG_R32(j + 8);
+	val32_4 = MAC_REG_R32(j + 0xc);
+	PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x %08x\n",
+			 j, val32_1, val32_2, val32_3, val32_4);
+
+	j=0x88b0;
+	val32_1 = MAC_REG_R32(j);
+	val32_2 = MAC_REG_R32(j + 4);
+	val32_3 = MAC_REG_R32(j + 8);
+	PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x\n",
+			 j, val32_1, val32_2, val32_3);
+
+	PLTFM_MSG_ALWAYS("0x8a08(0x%04X) = 0x%08X\n", 0x8a08,
+			 MAC_REG_R32(0x8a08));
+	PLTFM_MSG_ALWAYS("0x8a0c(0x%04X) = 0x%08X\n", 0x8a0c,
+			 MAC_REG_R32(0x8a0c));
+	PLTFM_MSG_ALWAYS("0x8a50(0x%04X) = 0x%08X\n", 0x8a50,
+			 MAC_REG_R32(0x8a50));
+
+	if (adapter->env_info.intf == MAC_AX_INTF_SDIO) {
+		PLTFM_MSG_ALWAYS("sdio Registers:\n");
+
+		j=0x1110;
+		val32_1 = MAC_REG_R32(j);
+		val32_2 = MAC_REG_R32(j + 4);
+		val32_3 = MAC_REG_R32(j + 8);
+		val32_4 = MAC_REG_R32(j + 0xc);
+		PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x %08x\n",
+				 j, val32_1, val32_2, val32_3, val32_4);
+
+		j=0x1120;
+		val32_1 = MAC_REG_R32(j);
+		val32_2 = MAC_REG_R32(j + 4);
+		val32_3 = MAC_REG_R32(j + 8);
+		PLTFM_MSG_ALWAYS("%08x : %08x %08x %08x\n",
+				 j, val32_1, val32_2, val32_3);
+
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_HIMR(0x%04X) = 0x%08X\n", R_AX_SDIO_HIMR,
+				 MAC_REG_R32(R_AX_SDIO_HIMR));
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_HISR(0x%04X) = 0x%08X\n", R_AX_SDIO_HISR,
+				 MAC_REG_R32(R_AX_SDIO_HISR));
+
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_RX_REQ_LEN(0x%04X) = 0x%08X\n", R_AX_SDIO_RX_REQ_LEN,
+				 MAC_REG_R32(R_AX_SDIO_RX_REQ_LEN));
+
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_DIOERR_RPT(0x%04X) = 0x%08X\n", R_AX_SDIO_DIOERR_RPT,
+				 MAC_REG_R32(R_AX_SDIO_DIOERR_RPT));
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_CMD_ERR_CONTENT_L(0x%04X) = 0x%08X\n", R_AX_SDIO_CMD_ERR_CONTENT_L,
+				 MAC_REG_R32(R_AX_SDIO_CMD_ERR_CONTENT_L));
+
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_CMD_ERR_CONTENT(0x%04X) = 0x%08X\n", R_AX_SDIO_CMD_ERR_CONTENT,
+				 MAC_REG_R32(R_AX_SDIO_CMD_ERR_CONTENT));
+		PLTFM_MSG_ALWAYS("R_AX_SDIO_TRANS_FIFO_STATUS(0x%04X) = 0x%08X\n", R_AX_SDIO_TRANS_FIFO_STATUS,
+				 MAC_REG_R32(R_AX_SDIO_TRANS_FIFO_STATUS));
+
+		val8 = PLTFM_SDIO_CMD52_CIA_R8(0x4);
+		PLTFM_MSG_ALWAYS("cccr 0x4 = 0x%02X\n", val8);
+
+		val8 = PLTFM_SDIO_CMD52_CIA_R8(0x5);
+		PLTFM_MSG_ALWAYS("cccr 0x5 = 0x%02X\n", val8);
+	}
+
+	return MACSUCCESS;
+}
+#endif
 #endif /* MAC_AX_FEATURE_DBGPKG */
