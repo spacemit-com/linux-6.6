@@ -610,6 +610,15 @@ static SPACEMIT_CCU_DDN(mn2_clk, "mn2_clk", "mn2_src_clk",
 	BASE_TYPE_MPMU, MPMU_PM_MN_GPCR2,
 	0);
 
+static SPACEMIT_CCU_GATE_FACTOR(i2s_sysclk, "i2s_sysclk", "pll1_d8_307p2",
+	BASE_TYPE_MPMU, MPMU_ISCCR,
+	BIT(31), BIT(31), 0x0,
+	200, 1, 0);
+static SPACEMIT_CCU_GATE_FACTOR(i2s_bclk, "i2s_bclk", "i2s_sysclk",
+	BASE_TYPE_MPMU, MPMU_ISCCR,
+	BIT(29), BIT(29), 0x0,
+	1, 1, 0);
+
 //apbc
 static const char * const uart_parent_names[] = {
 	"pll1_m3d128_57p6", "slow_uart1_14p74", "slow_uart2_48"
@@ -737,8 +746,16 @@ static SPACEMIT_CCU_MUX_GATE(pwm19_clk, "pwm19_clk", pwm_parent_names,
 	BASE_TYPE_APBC, APBC_PWM19_CLK_RST,
 	4, 3, 0x2, 0x2, 0x0,
 	0);
+
+static const char *i2s_parent_names[] = {
+	"vctcxo_1", "i2s_bclk"
+};
+
+static SPACEMIT_CCU_MUX(ssp3_i2s_clk, "ssp3_i2s_clk", i2s_parent_names,
+	BASE_TYPE_APBC, APBC_SSP3_CLK_RST,
+	3, 1, 0);
 static const char *ssp_parent_names[] = { "pll1_d384_6p4", "pll1_d192_12p8", "pll1_d96_25p6",
-	"pll1_d48_51p2", "pll1_d768_3p2", "pll1_d1536_1p6", "pll1_d3072_0p8", "vctcxo_1"
+	"pll1_d48_51p2", "pll1_d768_3p2", "pll1_d1536_1p6", "pll1_d3072_0p8", "ssp3_i2s_clk"
 };
 static SPACEMIT_CCU_MUX_GATE(ssp3_clk, "ssp3_clk", ssp_parent_names,
 	BASE_TYPE_APBC, APBC_SSP3_CLK_RST,
@@ -800,22 +817,23 @@ static SPACEMIT_CCU_GATE_NO_PARENT(onewire_clk, "onewire_clk", NULL,
 	BASE_TYPE_APBC, APBC_ONEWIRE_CLK_RST,
 	0x3, 0x3, 0x0, 0);
 
-static SPACEMIT_CCU_GATE_FACTOR(i2s_sysclk, "i2s_sysclk", "pll1_d8_307p2",
-	BASE_TYPE_MPMU, MPMU_ISCCR,
-	BIT(31), BIT(31), 0x0,
-	200, 1, 0);
-static SPACEMIT_CCU_GATE_FACTOR(i2s_bclk, "i2s_bclk", "i2s_sysclk",
-	BASE_TYPE_MPMU, MPMU_ISCCR,
-	BIT(29), BIT(29), 0x0,
-	1, 1, 0);
-static const char *sspa_parent_names[] = { "pll1_d384_6p4", "pll1_d192_12p8", "pll1_d96_25p6",
-	"pll1_d48_51p2", "pll1_d768_3p2", "pll1_d1536_1p6", "pll1_d3072_0p8", "i2s_bclk"
+static SPACEMIT_CCU_MUX(sspa0_i2s_clk, "sspa0_i2s_clk", i2s_parent_names,
+	BASE_TYPE_APBC, APBC_SSPA0_CLK_RST,
+	3, 1, 0);
+static const char *sspa0_parent_names[] = { "pll1_d384_6p4", "pll1_d192_12p8", "pll1_d96_25p6",
+	"pll1_d48_51p2", "pll1_d768_3p2", "pll1_d1536_1p6", "pll1_d3072_0p8", "sspa0_i2s_clk"
 };
-static SPACEMIT_CCU_MUX_GATE(sspa0_clk, "sspa0_clk", sspa_parent_names,
+static SPACEMIT_CCU_MUX_GATE(sspa0_clk, "sspa0_clk", sspa0_parent_names,
 	BASE_TYPE_APBC, APBC_SSPA0_CLK_RST,
 	4, 3, 0x3, 0x3, 0x0,
 	0);
-static SPACEMIT_CCU_MUX_GATE(sspa1_clk, "sspa1_clk", sspa_parent_names,
+static SPACEMIT_CCU_MUX(sspa1_i2s_clk, "sspa1_i2s_clk", i2s_parent_names,
+	BASE_TYPE_APBC, APBC_SSPA1_CLK_RST,
+	3, 1, 0);
+static const char *sspa1_parent_names[] = { "pll1_d384_6p4", "pll1_d192_12p8", "pll1_d96_25p6",
+	"pll1_d48_51p2", "pll1_d768_3p2", "pll1_d1536_1p6", "pll1_d3072_0p8", "sspa1_i2s_clk"
+};
+static SPACEMIT_CCU_MUX_GATE(sspa1_clk, "sspa1_clk", sspa1_parent_names,
 	BASE_TYPE_APBC, APBC_SSPA1_CLK_RST,
 	4, 3, 0x3, 0x3, 0x0,
 	0);
@@ -1602,6 +1620,9 @@ static struct clk_hw_onecell_data spacemit_k1x_hw_clks = {
 		[CLK_PM_MN]		= &mn_clk.common.hw,
 		[CLK_PM_MN2_SRC]	= &mn2_src_clk.common.hw,
 		[CLK_PM_MN2]		= &mn2_clk.common.hw,
+		[CLK_SSP3_I2S]		= &ssp3_i2s_clk.common.hw,
+		[CLK_SSPA0_I2S]		= &sspa0_i2s_clk.common.hw,
+		[CLK_SSPA1_I2S]		= &sspa1_i2s_clk.common.hw,
 	},
 	.num = CLK_MAX_NO,
 };
