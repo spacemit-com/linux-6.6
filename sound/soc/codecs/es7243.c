@@ -285,6 +285,9 @@ es7243l_set_dai_sysclk(struct snd_soc_dai *dai,
 		es7243l->sysclk_constraints = &constraints_112896;
 		es7243l->sysclk = freq;
 		return 0;
+#if SPACEMIT_CONFIG_ES7243
+	case 3072000:
+#endif
 	case 6144000:
 	case 12288000:
 	case 24576000:
@@ -386,6 +389,7 @@ static int
 es7243l_pcm_startup(struct snd_pcm_substream *substream,
 		    struct snd_soc_dai *dai)
 {
+#if !SPACEMIT_CONFIG_ES7243
 	struct snd_soc_component *component = dai->component;
 	struct es7243l_priv *es7243l = snd_soc_component_get_drvdata(component);
 
@@ -404,6 +408,7 @@ es7243l_pcm_startup(struct snd_pcm_substream *substream,
 				   SNDRV_PCM_HW_PARAM_RATE,
 				   es7243l->sysclk_constraints);
 
+#endif
 	return 0;
 }
 
@@ -2536,7 +2541,9 @@ static inline int get_mclk_lrck_ratio(int clk_ratio, int n_fs)
 static int es7243l_probe(struct snd_soc_component *component)
 {
 	struct es7243l_priv *es7243l = snd_soc_component_get_drvdata(component);
+#if !SPACEMIT_CONFIG_ES7243
 	int ret = 0;
+#endif
 	u8 index, regv, chn, work_mode, ratio_index, datbits;
 	u16 ratio;
 	u8 digital_vol[8], pga_gain[16];
@@ -2549,7 +2556,7 @@ static int es7243l_probe(struct snd_soc_component *component)
 	 * 1. sclk/bclk is used as mclk
 	 * 2. mclk is controled by soc I2S
 	 */
-#if 1
+#if !SPACEMIT_CONFIG_ES7243
 	es7243l->mclk = devm_clk_get(component->dev, "mclk");
 	if (IS_ERR(es7243l->mclk)) {
 		dev_err(component->dev, "%s,unable to get mclk\n", __func__);
@@ -3060,6 +3067,43 @@ static struct i2c_board_info es7243l_i2c_board_info[] = {
 #endif
 };
 #endif
+
+#if SPACEMIT_CONFIG_ES7243
+static const struct i2c_device_id es7243l_i2c_id[] = {
+#if ES7243l_CHANNELS_MAX > 0
+	{"es7243-MicArray_0", 0},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 2
+	{"es7243-MicArray_1", 1},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 4
+	{"es7243-MicArray_2", 2},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 6
+	{"es7243-MicArray_3", 3},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 8
+	{"es7243-MicArray_4", 4},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 10
+	{"es7243-MicArray_5", 5},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 12
+	{"es7243-MicArray_6", 6},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 14
+	{"es7243-MicArray_7", 7},
+#endif
+	{}
+};
+#else
 static const struct i2c_device_id es7243l_i2c_id[] = {
 #if ES7243l_CHANNELS_MAX > 0
 	{"MicArray_0", 0},
@@ -3094,9 +3138,46 @@ static const struct i2c_device_id es7243l_i2c_id[] = {
 #endif
 	{}
 };
+#endif
 
 MODULE_DEVICE_TABLE(i2c, es7243l_i2c_id);
 
+#if SPACEMIT_CONFIG_ES7243
+static const struct of_device_id es7243l_dt_ids[] = {
+#if ES7243l_CHANNELS_MAX > 0
+	{.compatible = "everest,es7243-MicArray_0",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 2
+	{.compatible = "everest,es7243-MicArray_1",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 4
+	{.compatible = "everest,es7243-MicArray_2",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 6
+	{.compatible = "everest,es7243-MicArray_3",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 8
+	{.compatible = "everest,es7243-MicArray_4",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 10
+	{.compatible = "everest,es7243-MicArray_5",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 12
+	{.compatible = "everest,es7243-MicArray_6",},
+#endif
+
+#if ES7243l_CHANNELS_MAX > 14
+	{.compatible = "everest,es7243-MicArray_7",},
+#endif
+	{},
+};
+#else
 static const struct of_device_id es7243l_dt_ids[] = {
 #if ES7243l_CHANNELS_MAX > 0
 	{.compatible = "MicArray_0",},
@@ -3131,6 +3212,7 @@ static const struct of_device_id es7243l_dt_ids[] = {
 #endif
 	{},
 };
+#endif
 
 MODULE_DEVICE_TABLE(of, es7243l_dt_ids);
 

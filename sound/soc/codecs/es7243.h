@@ -124,7 +124,13 @@
 #define AIN_12_CH  12
 #define AIN_14_CH  14
 #define AIN_16_CH  16
+
+#if IS_ENABLED(CONFIG_SND_SOC_SPACEMIT)
+#define SPACEMIT_CONFIG_ES7243  1
+#define ES7243l_CHANNELS_MAX    AIN_2_CH
+#else
 #define ES7243l_CHANNELS_MAX    AIN_4_CH
+#endif
 /*
  * to select the clock soure for internal MCLK clock
  */
