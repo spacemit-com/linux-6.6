@@ -1661,6 +1661,7 @@ void spacemit_clocks_init_rate(struct clk_hw_table *tbl, int tbl_size)
 		clk = clk_hw_get_clk(spacemit_k1x_hw_clks.hws[tbl[i].clk_hw_id], tbl[i].name);
 		if (!IS_ERR_OR_NULL(clk)) {
 			clk_set_rate(clk, tbl[i].rate);
+			clk_put(clk);
 		}
 		else
 			pr_err("%s : can't find clk %s\n", __func__, tbl[i].name);
@@ -1674,8 +1675,10 @@ void spacemit_clocks_enable(struct clk_hw_table *tbl, int tbl_size)
 
 	for (i = 0; i < tbl_size; i++) {
 		clk = clk_hw_get_clk(spacemit_k1x_hw_clks.hws[tbl[i].clk_hw_id], tbl[i].name);
-		if (!IS_ERR_OR_NULL(clk))
+		if (!IS_ERR_OR_NULL(clk)) {
 			clk_prepare_enable(clk);
+			clk_put(clk);
+		}
 		else
 			pr_err("%s : can't find clk %s\n", __func__, tbl[i].name);
 	}
@@ -1685,15 +1688,11 @@ unsigned long spacemit_k1x_ddr_freq_tbl[MAX_FREQ_LV + 1] = {0};
 void spacemit_fill_ddr_freq_tbl(void)
 {
 	int i;
-	struct clk *clk;
+	struct clk_hw *clk_hw;
 
 	for (i = 0; i < ARRAY_SIZE(spacemit_k1x_ddr_freq_tbl); i++) {
-		clk = clk_hw_get_clk(spacemit_k1x_hw_clks.hws[CLK_DFC_LVL0 + i], ddr_clk_parents[i]);
-
-		if (!IS_ERR_OR_NULL(clk))
-			spacemit_k1x_ddr_freq_tbl[i] = clk_get_rate(clk);
-		else
-			pr_err("%s : can't find clk %s\n", __func__, ddr_clk_parents[i]);
+		clk_hw = spacemit_k1x_hw_clks.hws[CLK_DFC_LVL0 + i];
+		spacemit_k1x_ddr_freq_tbl[i] = clk_hw_get_rate(clk_hw);
 	}
 }
 
