@@ -169,7 +169,7 @@
 		led1 {
 			label = "sys-led";
 			gpios = <&gpio 96 0>;
-			linux,default-trigger = "heartbeat";
+			linux,default-trigger = "none";
 			default-state = "on";
 			status = "okay";
 		};
