@@ -360,13 +360,12 @@ int k1x_spi_set_dma_burst_and_threshold(struct chip_data *chip,
 	 */
 	if (chip && chip->dma_burst_size)
 		*burst_code = chip->dma_burst_size;
-	else if (bits_per_word <= 8) {
-		*burst_code = 8;
-	}
-	else if (bits_per_word <= 16)
+	else if (bits_per_word <= 8)
 		*burst_code = 16;
-	else
+	else if (bits_per_word <= 16)
 		*burst_code = 32;
+	else
+		*burst_code = 64;
 
 	*threshold = FIFO_RxTresh(RX_THRESH_DFLT)
 		   | FIFO_TxTresh(TX_THRESH_DFLT);
