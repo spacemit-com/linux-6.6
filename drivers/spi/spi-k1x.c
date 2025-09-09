@@ -784,7 +784,7 @@ static int setup(struct spi_device *spi)
 	/* Only alloc on first setup */
 	chip = spi_get_ctldata(spi);
 	if (!chip) {
-		chip = devm_kzalloc(&spi->master->dev, sizeof(struct chip_data),
+		chip = devm_kzalloc(&spi->dev, sizeof(struct chip_data),
 				GFP_KERNEL);
 		if (!chip)
 			return -ENOMEM;
