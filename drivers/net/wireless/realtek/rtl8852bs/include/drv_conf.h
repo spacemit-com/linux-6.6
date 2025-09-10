@@ -681,8 +681,8 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 #ifdef CONFIG_WOWLAN
 
 #ifndef CONFIG_APF_VERSION
-#undef CONFIG_APF
-#undef CONFIG_APF_DBG
+#undef CONFIG_WOW_APF
+#undef CONFIG_WOW_APF_DBG
 #endif /* CONFIG_APF_VERSION */
 
 #ifdef CONFIG_RTW_IPS_WOW

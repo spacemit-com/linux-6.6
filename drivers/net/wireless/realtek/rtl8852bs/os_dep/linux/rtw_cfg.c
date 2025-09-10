@@ -1809,11 +1809,7 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 #else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_form_hdr = false;
 #endif
-#ifdef CONFIG_APF
-	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = true;
-#else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = false;
-#endif
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_tx_search_key = false;
 
 #ifdef CONFIG_80211AX_HE

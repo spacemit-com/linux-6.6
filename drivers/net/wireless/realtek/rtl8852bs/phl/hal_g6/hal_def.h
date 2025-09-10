@@ -1249,6 +1249,9 @@ struct rtw_hal_wow_cfg {
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 	struct rtw_mdns_ofld_info *mdns_ofld_info;
 #endif
+#ifdef CONFIG_PHL_WOW_APF
+	struct rtw_apf_info *apf_info;
+#endif
 };
 #endif /* CONFIG_WOWLAN */
 

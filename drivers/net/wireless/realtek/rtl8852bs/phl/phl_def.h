@@ -1109,12 +1109,6 @@ enum phl_msg_evt_id {
 
 	MSG_EVT_ANN_RX1SS = 240, /* Announce rx 1ss */
 	MSG_EVT_ANN_RX_MAXSS = 241, /* Announce rx nss for max cap */
-
-	/* APF */
-	MSG_EVT_APF_CTRL = 250,
-	MSG_EVT_APF_RPT_DONE =  251,
-	MSG_EVT_APF_FW_DIS = 252,
-
 	/* sub module IO */
 	MSG_EVT_NOTIFY_BB = 300,
 	MSG_EVT_NOTIFY_RF = 301,
@@ -5003,7 +4997,7 @@ enum pkt_ofld_type {
 	PKT_TYPE_MDNS_RSP_DATA = 15,
 	PKT_TYPE_MDNS_PASSTHRU_LIST = 16,
 	PKT_TYPE_APF_RSP_HDR = 17,
-	PKT_TYPE_APF_RAM = 18,
+	PKT_TYPE_APF_PROG = 18,
 	PKT_OFLD_TYPE_MAX,
 };
 

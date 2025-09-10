@@ -5708,8 +5708,8 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("wow_mdns_offload_state", proc_get_wow_mdns_offload_state, proc_set_wow_mdns_offload_state),
 	RTW_PROC_HDL_SSEQ("wow_mdns_passthru_behavior", proc_get_wow_mdns_passthru_behavior, proc_set_wow_mdns_passthru_behavior),
 #endif
-#ifdef CONFIG_APF
-	RTW_PROC_HDL_SSEQ("apf", proc_get_apf, proc_set_apf),
+#ifdef CONFIG_WOW_APF
+	RTW_PROC_HDL_SSEQ("wow_apf", proc_get_wow_apf, proc_set_wow_apf),
 #endif
 #endif /* CONFIG_WOWLAN */
 

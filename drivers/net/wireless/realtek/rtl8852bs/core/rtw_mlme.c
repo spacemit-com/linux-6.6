@@ -3693,9 +3693,6 @@ void rtw_core_watchdog_sw_hdlr(void *drv_priv)
 	rtw_mi_keep_alive_pre_chk_hdl(adapter);
 	rtw_dynamic_chk_wk_sw_hdl(adapter);
 	rtw_accumulate_fa_count(pdvobj);
-#ifdef CONFIG_APF
-	rtw_apf_cmd_hdl(adapter, PHL_APF_CMD_CHECK);
-#endif
 
 exit:
 	return;

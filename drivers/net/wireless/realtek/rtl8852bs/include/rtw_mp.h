@@ -343,6 +343,12 @@ enum {
 #ifdef CONFIG_FPGA_INCLUDED
 	FPGA_SET,
 #endif
+#ifdef CONFIG_WOW_APF
+	APF_SET,
+	APF_GET,
+	APF_DEFAULT_SET,
+	APF_DEFAULT_GET,
+#endif
 };
 
 struct rtw_plcp_user {

@@ -57,11 +57,11 @@ _phl_pkt_ofld_get_txt(u8 type)
 		case PKT_TYPE_MDNS_PASSTHRU_LIST:
 			return "MDNS_PASSTHRU_LIST";
 #endif
-#ifdef CONFIG_PHL_APF
+#ifdef CONFIG_PHL_WOW_APF
 		case PKT_TYPE_APF_RSP_HDR:
 			return "APF_RSP_HDR";
-		case PKT_TYPE_APF_RAM:
-			return "APF_RAM";
+		case PKT_TYPE_APF_PROG:
+			return "APF_PROG";
 #endif
 		default:
 			return "Unknown?!";
@@ -673,18 +673,17 @@ _phl_pkt_ofld_construct_mdns_passthru_list(struct pkt_ofld_obj *pkt, u8 **pkt_bu
 	return RTW_PHL_STATUS_SUCCESS;
 }
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
-#ifdef CONFIG_PHL_APF
+#ifdef CONFIG_PHL_WOW_APF
 static enum rtw_phl_status
 _phl_pkt_ofld_construct_apf_rsp_hdr(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 	u16 *len, struct rtw_phl_stainfo_t *phl_sta,
-	struct phl_apf_info *apf_info)
+	struct rtw_apf_info *apf_info)
 {
 	void *d = phl_to_drvpriv(pkt->phl_info);
 	u8* p_apf_rsp_body;
 	u8 APFLLCHeader[8] = {0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00};
 	u8 is_protected = apf_info->protect_bit;
 	u8 sec_hdr_len = apf_info->sec_hdr_len;
-	u8 ext_iv = 0;
 
 	/* size estimation */
 	/* sMacHdrLng + LLC header(8) */
@@ -700,6 +699,7 @@ _phl_pkt_ofld_construct_apf_rsp_hdr(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 	SET_80211_PKT_HDR_FRAME_CONTROL(*pkt_buf, 0);
 	SET_80211_PKT_HDR_TYPE_AND_SUBTYPE(*pkt_buf, TYPE_DATA_FRAME);
 	SET_80211_PKT_HDR_TO_DS(*pkt_buf, 1);
+
 	SET_80211_PKT_HDR_PROTECT(*pkt_buf, is_protected);
 
 	SET_80211_PKT_HDR_ADDRESS1(d, *pkt_buf, apf_info->a1);
@@ -712,20 +712,13 @@ _phl_pkt_ofld_construct_apf_rsp_hdr(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 	/* Frame bod*/
 	p_apf_rsp_body = (u8*)(*pkt_buf + MAC_HDR_LEN);
 
-	if (sec_hdr_len != 0) {
-		ext_iv = (sec_hdr_len == 8 ? 1 : 0);
-		/* sec_hdr set key_idx */
-		p_apf_rsp_body[3] |= (u8)(apf_info->key_idx << 6);
-		p_apf_rsp_body[3] |= (u8)(ext_iv << 5);
-		/* PHL_INFO("%s() key_idx:%u p_apf_rsp_body[3]:0x%02X\n", __func__, apf_info->key_idx, (u8)p_apf_rsp_body[3]); */
-		/* offset for security iv */
-		p_apf_rsp_body += sec_hdr_len;
-	}
+	/* offset for security iv */
+	p_apf_rsp_body += sec_hdr_len;
 
 	/* LLC header */
 	_os_mem_cpy(d, p_apf_rsp_body, APFLLCHeader, 8);
 
-#ifdef CONFIG_PHL_APF_DBG
+#ifdef CONFIG_PHL_WOW_APF_DBG
 	PHL_INFO("%s() consturct apf rsp hdr len(%u)\n", __func__, *len);
 	debug_dump_data(*pkt_buf, *len, __func__);
 #endif
@@ -733,20 +726,18 @@ _phl_pkt_ofld_construct_apf_rsp_hdr(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 }
 
 static enum rtw_phl_status
-_phl_pkt_ofld_construct_apf_ram(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
+_phl_pkt_ofld_construct_apf_prog(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 	u16 *len, struct rtw_phl_stainfo_t *phl_sta,
-	struct phl_apf_info *info)
+	struct rtw_apf_info *apf_info)
 {
 	void *d = phl_to_drvpriv(pkt->phl_info);
-	u8 idx_apf_prog_ofld = info->ofld_idx;
-	u16 apf_ram_ofst = (idx_apf_prog_ofld - 1) * APF_RAM_FRAG_SIZE;
-	u16 ofld_len = (info->is_ram_ofld ? MAX_APF_RAM_SIZE : info->ram.prog_len);
-	/* last fragment size */
-	u16 rem = ofld_len % APF_RAM_FRAG_SIZE ? ofld_len % APF_RAM_FRAG_SIZE : APF_RAM_FRAG_SIZE;
-	u8 frag_num = APF_RAM_FRAG_NUM(ofld_len, APF_RAM_FRAG_SIZE);
+	u8 idx_apf_prog_ofld = apf_info->idx_apf_prog_ofld;
+	u16 apf_ram_len;
 
-	/* apf ram frag */
-	*len = idx_apf_prog_ofld < frag_num ? APF_RAM_FRAG_SIZE : rem;
+	/* size estimation */
+	/* apf prog + data size */
+	apf_ram_len = apf_info->apf_prog_len + apf_info->apf_data_len;
+	*len = apf_ram_len;
 
 	*pkt_buf = _os_mem_alloc(d, *len);
 
@@ -755,17 +746,17 @@ _phl_pkt_ofld_construct_apf_ram(struct pkt_ofld_obj *pkt, u8 **pkt_buf,
 
 	_os_mem_set(d, *pkt_buf, 0, *len);
 
-	_os_mem_cpy(d, *pkt_buf, (info->ram.buf + apf_ram_ofst), *len);
+	_os_mem_cpy(d, *pkt_buf, apf_info->apf_prog, apf_ram_len);
 
-#ifdef CONFIG_PHL_APF_DBG
-	PHL_INFO("%s() consturct apf ram frag ofld(%u) len(%u)\n", __func__, idx_apf_prog_ofld, *len);
-	debug_dump_data(*pkt_buf, *len, __func__);
-
+#ifdef CONFIG_PHL_WOW_APF_DBG
+	PHL_INFO("%s() consturct apf prog ofld(%u) prog_len(%u) data_len(%u)\n", __func__, idx_apf_prog_ofld, \
+		 apf_info->apf_prog_len, apf_info->apf_data_len);
+	debug_dump_data(*pkt_buf, apf_ram_len, __func__);
 #endif
+
 	return RTW_PHL_STATUS_SUCCESS;
 }
-
-#endif /* CONFIG_PHL_APF */
+#endif /* CONFIG_PHL_WOW_APF */
 
 static enum rtw_phl_status
 _phl_pkt_ofld_construct_eapol_key_data(struct pkt_ofld_obj *ofld_obj, u8 **pkt_buf,
@@ -1050,14 +1041,14 @@ _phl_pkt_ofld_construct_packet(struct pkt_ofld_obj *ofld_obj, u16 macid,
 			len, (struct rtw_mdns_passthru_name *) buf);
 		break;
 #endif
-#ifdef CONFIG_PHL_APF
+#ifdef CONFIG_PHL_WOW_APF
 	case PKT_TYPE_APF_RSP_HDR:
 		status = _phl_pkt_ofld_construct_apf_rsp_hdr(ofld_obj, pkt_buf,
-			len, phl_sta, (struct phl_apf_info *) buf);
+			len, phl_sta, (struct rtw_apf_info *) buf);
 		break;
-	case PKT_TYPE_APF_RAM:
-		status = _phl_pkt_ofld_construct_apf_ram(ofld_obj, pkt_buf,
-			len, phl_sta, (struct phl_apf_info *) buf);
+	case PKT_TYPE_APF_PROG:
+		status = _phl_pkt_ofld_construct_apf_prog(ofld_obj, pkt_buf,
+			len, phl_sta, (struct rtw_apf_info *) buf);
 		break;
 #endif
 	case PKT_TYPE_PROBE_RSP:
@@ -1693,11 +1684,11 @@ const char *phl_get_pkt_ofld_str(enum pkt_ofld_type type)
 	case PKT_TYPE_MDNS_PASSTHRU_LIST:
 		return "PKT_TYPE_MDNS_PASSTHRU_LIST";
 #endif
-#ifdef CONFIG_PHL_APF
+#ifdef CONFIG_PHL_WOW_APF
 		case PKT_TYPE_APF_RSP_HDR:
 			return "PKT_TYPE_APF_RSP_HDR";
-		case PKT_TYPE_APF_RAM:
-			return "PKT_TYPE_APF_RAM";
+		case PKT_TYPE_APF_PROG:
+			return "PKT_TYPE_APF_PROG";
 
 #endif
 	default:

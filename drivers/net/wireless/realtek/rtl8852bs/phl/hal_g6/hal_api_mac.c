@@ -4789,7 +4789,7 @@ rtw_hal_mac_wow_dbg_dump(struct hal_info_t *hal_info)
 }
 
 
-#if defined(CONFIG_PHL_MDNS_OFFLOAD) || defined(CONFIG_PHL_APF)
+#if defined(CONFIG_PHL_MDNS_OFFLOAD) || defined(CONFIG_PHL_WOW_APF)
 static enum rtw_hal_status
 _hal_mac_cfg_check_proxy_done(struct hal_info_t *hal_info,
 			      u8 *fw_ret)
@@ -4875,99 +4875,83 @@ rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
 	return RTW_HAL_STATUS_SUCCESS;
 }
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
-#ifdef CONFIG_PHL_APF
-#define APF_PKTID_OFST 4
-#define APF_PKTID_NUM 8
-/* Before calling rtw_hal_mac_ctrl_apf, must set rtw_apf_info->apf_cmd & do necessarry apf ram pkt ofld*/
+#ifdef CONFIG_PHL_WOW_APF
 enum rtw_hal_status
-rtw_hal_mac_ctrl_apf(struct hal_info_t *hal_info, struct phl_apf_info *info)
+rtw_hal_mac_cfg_apf_ofld(struct hal_info_t *hal_info, u16 macid, struct rtw_apf_info *cfg, u8 set)
 {
 	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
 	struct mac_ax_ops *hal_mac_ops = mac->ops;
-	struct rtw_hal_mac_apf_ctrl *apf_ctrl = NULL;
-	u8 *pktids;
-	u8 i;
-	u8 fw_ret = 0;
-	u32 mac_err = 0;
-
+	struct rtw_hal_mac_apf info = {0};
+	struct rtw_hal_mac_apf_report rpt_info = {0};
 	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+	u8 i, fw_ret;
+	u32 mac_err;
 
-	apf_ctrl = &mac->apf_info;
-	apf_ctrl->apf_cmd = info->apf_cmd;
-	apf_ctrl->apf_ram_size = MAX_APF_RAM_SIZE;
-	apf_ctrl->macid = info->macid;
-	apf_ctrl->pairwise_sec_algo = info->pairwise_sec_algo;
-	apf_ctrl->group_sec_algo = info->group_sec_algo;
-	apf_ctrl->hw_aes_iv = info->hw_sec_iv;
+	/* mac_apf_ofld */
+	if (set == 1) {
+		info.macid = macid;
+		info.mac_pktid = cfg->mac_pktid;
+		for (i = 0; i < cfg->apf_prog_num; i++) {
+			/* mac->apf_info.ptr[i] for mac_apf_get_report */
+			mac->apf_info.ptr[i] = cfg->apf_prog;
+			info.program_pktid[i] = cfg->program_pktid;
+			info.ptr[i] = cfg->apf_prog;
+			info.prog_info[i].prog_len = cfg->apf_prog_len;
+			info.prog_info[i].data_len = cfg->apf_data_len;
+			info.program_mask |= BIT(i);
 
-	/* assign mac_pktid and apf_pktid with bitmask */
-	pktids = (u8*)((u8*)(apf_ctrl) + APF_PKTID_OFST);
-
-	/* APF_CMD_CHANGE will set correspond pktid, otherwise set to NOT_USED */
-	_os_mem_set(hal_to_drvpriv(hal_info), pktids, 0xFF, APF_PKTID_NUM);
-	apf_ctrl->apf_prog_size = 0;
-	apf_ctrl->apf_prog_frag_num = 0;
-	if (apf_ctrl->apf_cmd == PHL_APF_CMD_CHANGE) {
-#ifdef CONFIG_PHL_APF_DBG
-		PHL_INFO("%s() APF RAM change with machdr_chg(%u)\n", __func__, info->mac_chg);
+			if (info.program_mask != 0) {
+				info.apf_en = 1;
+				info.apf_type = 0;
+			} else {
+				PHL_INFO("%s APF not enable\n", __func__);
+			}
+#ifdef CONFIG_PHL_WOW_APF_DBG
+		PHL_INFO("%s() set apf_prog(%u) prog_len(%u) data_len(%u)\n", __func__, i,
+			 info.prog_info[i].prog_len, info.prog_info[i].data_len);
 #endif
-		if (info->mac_chg) {
-			pktids[0] = info->apf_ram_frag_pktid[0];
 		}
-		apf_ctrl->apf_prog_frag_num = APF_RAM_FRAG_NUM(info->ram.prog_len, APF_RAM_FRAG_SIZE);
-		/* apf_ram_frag_pktid[1:4] */
-		for (i = 1; i <= apf_ctrl->apf_prog_frag_num; i++) {
-			pktids[i] = info->apf_ram_frag_pktid[i];
+		if (hal_mac_ops->apf_ofld) {
+			mac_err = hal_mac_ops->apf_ofld(mac, &info);
+		} else {
+			PHL_ERR("mac_apf_ofld is NULL\n");
+			return RTW_HAL_STATUS_MAC_API_FAILURE;
 		}
-		apf_ctrl->apf_prog_size = info->ram.prog_len;
 
-		info->mac_chg = 0;
-	}
-
-#ifdef CONFIG_PHL_APF_DBG
-	PHL_INFO("[APFDBG] (%s)\n",  __func__);
-	PHL_INFO("     ===== [apf_ctrl] =====\n");
-	PHL_INFO("apf_cmd(%s) apf_prog_frag_num(%u) apf_prog_size(%u) apf_ram_size(%u)\n",
-		 _apf_cmd_to_str(apf_ctrl->apf_cmd), apf_ctrl->apf_prog_frag_num, apf_ctrl->apf_prog_size, apf_ctrl->apf_ram_size);
-	PHL_INFO("pairwise_sec(%u) group_sec(%u) hw_aes_iv(%u)\n",
-		 apf_ctrl->pairwise_sec_algo, apf_ctrl->group_sec_algo, apf_ctrl->hw_aes_iv);
-	PHL_INFO("mac_pktid(%02X) apf_pktid1(%02X) apf_pktid2(%02X) apf_pktid3(%02X)\n",
-		 apf_ctrl->mac_pktid, apf_ctrl->apf_pktid1, apf_ctrl->apf_pktid2, apf_ctrl->apf_pktid3);
-	PHL_INFO("apf_pktid4(%02X) apf_pktid5(%02X) apf_pktid6(%02X) apf_pktid7(%02X)\n",
-		 apf_ctrl->apf_pktid4, apf_ctrl->apf_pktid5, apf_ctrl->apf_pktid6, apf_ctrl->apf_pktid7);
-#endif
-#ifdef CONFIG_PHL_APF_DUMMY_MAC
-	PHL_INFO("%s() DUMMY MAC\n", __func__);
-	if (info->apf_cmd != PHL_APF_CMD_REPORT && info->apf_cmd != PHL_APF_CMD_CLEAR &&
-	    info->apf_cmd != PHL_APF_CMD_CHANGE)
-		info->apf_state = (enum phl_apf_state)info->apf_cmd;
-
-	goto exit;
-#endif
-	if (hal_mac_ops->apf_ofld_ctrl) {
-		mac_err = hal_mac_ops->apf_ofld_ctrl(mac, apf_ctrl, info->fw_mode);
 		if (mac_err != MACSUCCESS) {
-			PHL_ERR("mac_apf_ofld_ctrl fail(%u)\n", mac_err);
-			hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
-			goto exit;
+			PHL_ERR("%s : apf_ofld failed, mac err (%u) \n", __func__, mac_err);
+			return RTW_HAL_STATUS_FAILURE;
 		}
-	} else {
-		PHL_ERR("mac_apf_ofld is NULL\n");
-		hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
-		goto exit;
+
+		hstatus = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
+		if (hstatus != RTW_HAL_STATUS_SUCCESS) {
+			PHL_ERR("%s : check proxy done fail \n", __func__);
+			return RTW_HAL_STATUS_FAILURE;
+		}
+
+	} else { /* mac_apf_get_report */
+#ifdef CONFIG_PHL_WOW_APF_DBG
+		PHL_INFO("%s() get apf_prog(%u)\n", __func__, cfg->idx_apf_prog_ofld);
+#endif
+		rpt_info.program_num = cfg->idx_apf_prog_ofld;
+		if (hal_mac_ops->apf_get_report) {
+			mac_err = hal_mac_ops->apf_get_report(mac, &rpt_info);
+		} else {
+			PHL_ERR("mac_apf_get_report is NULL\n");
+			return RTW_HAL_STATUS_MAC_API_FAILURE;
+		}
+
+		if (mac_err != MACSUCCESS) {
+			PHL_ERR("%s : failed, mac err (%u) \n", __func__, mac_err);
+			return RTW_HAL_STATUS_FAILURE;
+		}
+		hstatus = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
 	}
 
-	hstatus = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
-	if (hstatus != RTW_HAL_STATUS_SUCCESS) {
-		PHL_ERR("%s : check proxy done fail fw_ret(%u)\n", __func__, fw_ret);
-		hstatus = RTW_HAL_STATUS_FAILURE;
-		goto exit;
-	}
-
-exit:
 	return hstatus;
 }
-#endif /* CONFIG_PHL_APF */
+
+#endif /* CONFIG_WOW_PHL_APF */
 #endif /* CONFIG_WOWLAN */
 
 #define MAX_POLLING_FW_STS_TIME 100 /* ms */
@@ -10308,11 +10292,6 @@ u32 rtw_hal_mac_process_c2h(void *hal, struct rtw_c2h_info *c2h, struct c2h_evt_
 		_hal_mac_process_usr_tx_rpt(hal, &c2h_rpt.u.usr_tx_rpt);
 		break;
 #endif /*CONFIG_PHL_CUSTOM_FRAME_STAT*/
-#ifdef CONFIG_PHL_APF_DBG
-	case MSG_EVT_APF_RPT_DONE:
-		PHL_INFO("[APFDBG] %s() MSG_EVT_APF_RPT_DONE\n", __func__);
-		break;
-#endif
 	}
 exit:
 	return retid;

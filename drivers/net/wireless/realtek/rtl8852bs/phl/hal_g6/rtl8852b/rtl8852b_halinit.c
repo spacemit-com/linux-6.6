@@ -158,11 +158,7 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 
 	hal_com->dev_hw_cap.sec_cap.hw_form_hdr = false;
 	hal_com->dev_hw_cap.sec_cap.hw_tx_search_key = false;
-#ifdef CONFIG_PHL_APF
-	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = true;
-#else
 	hal_com->dev_hw_cap.sec_cap.hw_sec_iv = false;
-#endif
 
 #ifdef CONFIG_MCC_SUPPORT
 	hal_com->dev_hw_cap.mcc_sup = true;

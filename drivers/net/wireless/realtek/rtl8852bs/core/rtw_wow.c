@@ -123,9 +123,12 @@ void rtw_init_wow(_adapter *padapter)
 	_rtw_memset(&wowpriv->mdns_ofld_info, 0,
 			sizeof(struct rtw_mdns_ofld_info));
 #endif
-#ifdef CONFIG_APF
-	rtw_init_apf(padapter);
-#endif /* CONFIG_APF */
+#ifdef CONFIG_WOW_APF
+	wowpriv->apf_info.apf_en = 0;
+	wowpriv->apf_info.apf_prog_num = 0;
+	wowpriv->apf_info.apf_prog_total_size = 0;
+	_rtw_memset(wowpriv->apf_info.apf_prog, 0, MAX_APF_PROG_SIZE);
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_WOW_PERIODIC_WAKE
@@ -137,12 +140,26 @@ void rtw_init_wow(_adapter *padapter)
 void rtw_free_wow(_adapter *adapter)
 {
 	struct pwrctrl_priv *pwrctrlpriv = adapter_to_pwrctl(adapter);
+#ifdef CONFIG_WOW_APF
+	struct wow_priv *wowpriv = adapter_to_wowlan(adapter);
+	struct rtw_apf_info *apf_info = &wowpriv->apf_info;
+#endif
 
 	_rtw_mutex_free(&pwrctrlpriv->wowlan_pattern_cam_mutex);
 
 #if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_ANDROID_POWER)
 	rtw_unregister_early_suspend(pwrctrlpriv);
 #endif /* CONFIG_HAS_EARLYSUSPEND || CONFIG_ANDROID_POWER */
+#ifdef CONFIG_WOW_APF
+	RTW_INFO("%s() clear apf prog related resource\n", __func__);
+	RTW_INFO("apf prog num(%u)\n", apf_info->apf_prog_num);
+
+	apf_info->apf_prog_len = 0;
+	apf_info->apf_data_len = 0;
+	apf_info->apf_en = 0;
+	apf_info->apf_prog_num = 0;
+	apf_info->apf_prog_total_size = 0;
+#endif /* CONFIG_WOW_APF */
 }
 
 void rtw_wowlan_set_pattern_cast_type(_adapter *adapter, struct rtw_wowcam_upd_info *wowcam_info)
@@ -743,212 +760,89 @@ void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru
 }
 #endif /* CONFIG_MDNS_OFFLOAD */
 
-#ifdef CONFIG_APF
-static inline bool _is_cmd_legal(enum rtw_screen_mode _mode, enum mlme_state _state, enum phl_apf_cmd _cmd)
+#ifdef CONFIG_WOW_APF
+u8 rtw_wow_set_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 apf_prog_len)
 {
-	bool _is_cmd_valid = true;
-	if (_state == MLME_LINKED) {
-		if (_cmd == PHL_APF_CMD_DISABLE)
-			_is_cmd_valid = false;
-	}
-
-	if (_cmd >= PHL_APF_CMD_DRV)
-		_is_cmd_valid = false;
-#ifdef CONFIG_APF_DBG
-	RTW_INFO("[APFDBG] screen(%s) mstate(%u) cmd(%s)\n",
-		 _mode == SCREEN_OFF ? "OFF" : "ON", _state, _apf_cmd_to_str(_cmd));
-#endif
-	return _is_cmd_valid;
-}
-void rtw_init_apf(struct _ADAPTER *padapter)
-{
-	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
-	void *phl = GET_PHL_INFO(dvobj);
-	struct rtw_phl_com_t *phl_com = dvobj->phl_com;
-	struct dev_cap_t *dev_cap = &phl_com->dev_cap;
 	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
-	struct phl_apf_info *info = &(wowpriv->apf_info);
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u16 apf_ram_len;
+	u16 apf_data_len;
 
-	/* init wowpriv apf related parameter & apf_info */
-	wowpriv->screen_mode = SCREEN_ON;
-	wowpriv->mstate = MLME_NO_LINK;
-	wowpriv->apf_active_tp_th = APF_ACTIVE_TP_TH;
+	RTW_INFO("%s()\n", __func__);
+	/*data len = apf_ram_len() - apf_prog_len*/
+	apf_data_len = MAX_APF_PROG_SIZE - apf_prog_len;
+	RTW_INFO("apf_prog_len(%u) apf_data_len(%u)\n", apf_prog_len, apf_data_len);
+	apf_ram_len = apf_prog_len + apf_data_len;
+	/* Check apf prog limitation */
+	if (apf_ram_len > MAX_APF_PROG_SIZE) {
+		RTW_ERR("%s() apf prog size (%u) exceed prog limit(%u)\n",
+				__func__, apf_ram_len, MAX_APF_PROG_SIZE);
+	}
 
-	info->apf_cmd = PHL_APF_CMD_NONE;
-	info->apf_state = PHL_APF_DISABLE;
-	info->fw_mode = RTW_FW_NIC;
-	info->macid = 0;
-	info->apf_force_dis = PHL_APF_FORCE_IGNORE;
+	/* Dont clear apf program ram, this apf ram is controlled by android */
+	info->apf_prog_len = apf_prog_len;
+	info->apf_data_len = apf_data_len;
+	_rtw_memcpy(info->apf_prog, apf_prog, apf_prog_len);
 
-	/* pkt ofld related */
-	info->ofld_idx = 0;
-	info->is_ram_ofld = 0;
-	info->mac_chg = 0;
-	_rtw_memset(info->apf_ram_frag_pktid, 0xFF, 8);
-	info->ram.prog_len = 0;
-	_rtw_memset(info->ram.buf, 0, MAX_APF_RAM_SIZE);
+	info->apf_prog_num = 1;
+	info->apf_prog_total_size = apf_ram_len;
 
-	/* security info for mac hdr */
-	info->pairwise_sec_algo = _NO_PRIVACY_;
-	info->group_sec_algo = _NO_PRIVACY_;
-	info->hw_sec_iv = dev_cap->sec_cap.hw_sec_iv;
-#ifdef CONFIG_APF
-	info->apf_cmd_seq = 0;
+	if (info->apf_prog_num > 0) {
+		RTW_INFO("%s apf_en is 1\n", __func__);
+		info->apf_en = 1;
+	}
+
+#ifdef CONFIG_WOW_APF_DBG
+	RTW_INFO("[APFDBG]%s() apf prog num(%u) total_size(%u)\n", __func__, info->apf_prog_num, info->apf_prog_total_size);
+	RTW_INFO_DUMP(NULL, info->apf_prog, info->apf_prog_len);
 #endif
-	/* hook phl & halmac */
-	rtw_phl_init_apf(phl, info);
+	return _SUCCESS;
 }
 
-void rtw_apf_cmd_hdl(struct _ADAPTER *padapter, enum phl_apf_cmd cmd)
-{
-	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
-	void *phl = GET_PHL_INFO(dvobj);
-	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(padapter);
-	struct rtw_phl_stainfo_t *phl_sta = NULL;
-	struct security_priv *securitypriv = &padapter->securitypriv;
-	enum mlme_state mstate;
-
+u8 rtw_wow_get_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 *apf_prog_len) {
 	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
-	struct phl_apf_info *info = &wowpriv->apf_info;
-	struct phl_apf_cmd_blob *cmd_blob = NULL;
-	u32 screen_mode = (u32)wowpriv->screen_mode;
-	u32 apf_active_tp_th = wowpriv->apf_active_tp_th;
-	u32 cur_tx_tp = dvobj->traffic_stat.cur_tx_tp;
-	u32 cur_rx_tp = dvobj->traffic_stat.cur_rx_tp;
-	u8 enable_ampdu = 1;
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u16 apf_ram_len;
+	u8 apf_data_len;
 
-	if (!is_primary_adapter(padapter) || !MLME_IS_STA(padapter)) {
-		RTW_INFO("%s() APF is used for primary adapter & STA only\n", __func__);
-		return;
-	}
-
-	if (padapter->netif_up) {
-		phl_sta = rtw_phl_get_stainfo_self(phl, alink->wrlink);
-		if (!phl_sta) {
-			RTW_ERR("%s() netif_up but phl_sta is NULL\n", __func__);
-			return;
-		}
-		mstate = phl_sta->rlink->mstate;
-		if (mstate != MLME_LINKED &&
-		    !(cmd == PHL_APF_CMD_MEDIA_STATUS_CHG || cmd == PHL_APF_CMD_CHECK)) {
-#ifdef CONFIG_APF_DBG
-			RTW_INFO("[APFDBG]%s() !!NOT CONNECTED!! manipulate APF while connected!!\n", __func__);
+	RTW_INFO("%s()\n", __func__);
+	if (apf_prog == NULL || apf_prog_len == NULL || info->apf_prog == NULL) {
+		RTW_ERR("%s() buffer or apf_prog[%u] is NULL\n", __func__, 0);
+#ifdef CONFIG_WOW_APF_DBG
+		RTW_INFO("[APFDBG]====apf prog_len(%u) data_len(%u)====\n"
+					 , info->apf_prog_len, info->apf_data_len);
+		RTW_INFO_DUMP(NULL, info->apf_prog, info->apf_prog_len + info->apf_data_len);
 #endif
-			return;
-		}
-	} else {
-		return;
+		return _FAIL;
 	}
 
-#ifdef CONFIG_APF_DBG
-	if (PHL_APF_CMD_CHECK != cmd)
-		RTW_INFO("[APFDBG] %s() apf_cmd(%s) new_cmd(%s)\n",
-			 __func__, _apf_cmd_to_str(info->apf_cmd), _apf_cmd_to_str(cmd));
+	*apf_prog_len = info->apf_prog_len;
+	info->apf_data_len = MAX_APF_PROG_SIZE - info->apf_prog_len;
+	_rtw_memcpy(apf_prog, info->apf_prog, info->apf_prog_len + info->apf_data_len);
+#ifdef CONFIG_WOW_APF_DBG
+	RTW_INFO("[APFDBG]%s() Get apf_prog, prog_len(%u) data_len(%u)\n"
+			 , __func__,  *apf_prog_len, info->apf_data_len);
+	RTW_INFO_DUMP(NULL, apf_prog, *apf_prog_len + info->apf_data_len);
 #endif
-	if (info->apf_force_dis == PHL_APF_FORCE_DIS &&
-		(cmd == PHL_APF_CMD_ENABLE || cmd == PHL_APF_CMD_CHECK)) {
-		RTW_INFO("%s() FORCE DISABLE APF\n", __func__);
-		if (info->apf_state == PHL_APF_STANDBY)
-			return;
-		cmd = PHL_APF_STANDBY;
-	}
-
-	cmd_blob = rtw_malloc(sizeof(struct phl_apf_cmd_blob));
-#ifdef CONFIG_APF_DBG
-	if (info->apf_cmd != PHL_APF_CMD_NONE) {
-		RTW_INFO("[APFDBG]%s() apf_cmd is not NONE\n", __func__);
-	}
-#endif
-	/* PHL_APF_CMD_ENABLE needs to check if is_screen_off is true after initialization, then it should change to standby mode. */
-	cmd_blob->is_screen_off = wowpriv->screen_mode;
-
-	if (PHL_APF_CMD_MEDIA_STATUS_CHG == cmd) {
-		RTW_INFO("%s() Media Status Change\n", __func__);
-		wowpriv->mstate = mstate;
-		info->macid = phl_sta->macid;
-		info->mac_chg = 1;
-		if (mstate == MLME_LINKED) {
-			cmd = (wowpriv->screen_mode == SCREEN_ON ? PHL_APF_CMD_STANDBY : PHL_APF_CMD_ENABLE);
-			info->pairwise_sec_algo = rtw_sec_algo_drv2phl(securitypriv->dot11PrivacyAlgrthm);
-			info->group_sec_algo = rtw_sec_algo_drv2phl(securitypriv->dot118021XGrpPrivacy);
-			info->protect_bit = (info->pairwise_sec_algo == RTW_ENC_NONE ? 0 : 1);
-			info->key_idx = (u8)securitypriv->dot11PrivacyKeyIndex;
-			_rtw_memcpy(info->a1, phl_sta->mac_addr, MAC_ADDRESS_LENGTH);
-			_rtw_memcpy(info->a2, phl_sta->wrole->mac_addr, MAC_ADDRESS_LENGTH);
-			_rtw_memcpy( info->a3, phl_sta->mac_addr, MAC_ADDRESS_LENGTH);
-		} else {
-			cmd = PHL_APF_CMD_DISABLE;
-			info->pairwise_sec_algo = rtw_sec_algo_drv2phl(_NO_PRIVACY_);
-			info->group_sec_algo = rtw_sec_algo_drv2phl(_NO_PRIVACY_);
-			info->protect_bit = 0;
-			info->key_idx = 0;
-			_rtw_memset(info->a1, 0xFF, MAC_ADDRESS_LENGTH);
-			_rtw_memset(info->a2, 0xFF, MAC_ADDRESS_LENGTH);
-			_rtw_memset(info->a3, 0xFF, MAC_ADDRESS_LENGTH);
-		}
-#ifdef CONFIG_APF_DBG
-		RTW_INFO("[APFDBG] %s() mstate(%u) pairwise_sec(%u) group_sec(%u) key_idx(%u)\n",
-			 __func__, wowpriv->mstate, info->pairwise_sec_algo,
-			 info->group_sec_algo, info->key_idx);
-#endif
-		goto manipulate_apf;
-	}
-
-	if (PHL_APF_CMD_CHECK == cmd) {
-		if (screen_mode == SCREEN_OFF) {
-			/* check TP and apf_state */
-			if (cur_rx_tp + cur_tx_tp > apf_active_tp_th) {
-				if (IS_STATE(info->apf_state, PHL_APF_ENABLE)) {
-					RTW_INFO("%s() Traffic is not idle, standby APF\n", __func__);
-					cmd = PHL_APF_CMD_STANDBY;
-				}
-
-			} else {
-				if (info->apf_state == PHL_APF_STANDBY) {
-					RTW_INFO("%s() Traffic is idle, enable APF\n", __func__);
-					cmd_blob->is_screen_off = wowpriv->screen_mode;
-					cmd = PHL_APF_CMD_ENABLE;
-				}
-			}
-		} else {
-			if (IS_STATE(info->apf_state, PHL_APF_ENABLE)) {
-				cmd = PHL_APF_CMD_STANDBY;
-			}
-
-		}
-		/* if no need to switch apf enable/standby */
-		if (PHL_APF_CMD_CHECK == cmd)
-			return;
-
-		goto manipulate_apf;
-	}
-
-	if (!_is_cmd_legal(screen_mode, mstate, cmd)) {
-		RTW_ERR("%s() cmd(%s) is illegal\n", __func__, _apf_cmd_to_str(cmd));
-		return;
-	}
-manipulate_apf:
-#ifdef CONFIG_APF_DBG
-	info->apf_cmd_seq++;
-	RTW_INFO("[APFDBG] %s() cmd seq apf_cmd(%s) seq(%llu)\n",
-		 __func__, _apf_cmd_to_str(cmd), info->apf_cmd_seq);
-#endif
-	/* APF cannot handle amsdu pkt, disable ampdu before enable APF */
-	if (info->fw_mode == RTW_FW_NIC &&
-	    (PHL_APF_CMD_ENABLE == cmd || PHL_APF_CMD_STANDBY == cmd)) {
-		RTW_INFO("%s() %s AMPDU\n", __func__,
-			 PHL_APF_CMD_ENABLE == cmd ? "Disable" : "Auto");
-		enable_ampdu = PHL_APF_CMD_ENABLE == cmd ? 0 : RX_AMPDU_ACCEPT_INVALID;
-		if (rtw_rx_ampdu_set_accept(padapter, enable_ampdu, RX_AMPDU_DRV_FIXED)) {
-			RTW_INFO("Change AMPDU \n");
-			rtw_rx_ampdu_apply(padapter);
-		}
-	}
-	cmd_blob->cmd = cmd;
-	rtw_phl_manipulate_apf_cmd(phl, cmd_blob);
+	return _SUCCESS;
 }
 
-#endif /* CONFIG_APF */
+u8 rtw_wow_clear_apf(struct _ADAPTER *padapter) {
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u8 apf_ram_len;
+
+	RTW_INFO("%s()\n", __func__);
+	_rtw_memset(info->apf_prog, 0, MAX_APF_PROG_SIZE);
+	info->apf_prog_len = 0;
+	info->apf_data_len = 0;
+	info->apf_en = 0;
+	info->apf_prog_num = 0;
+	info->apf_prog_total_size = 0;
+
+	return _SUCCESS;
+}
+#endif /* CONFIG_WOW_APF */
 
 #ifdef CONFIG_GTK_OL
 void _update_aoac_rpt_phase_0(_adapter *adapter, struct rtw_aoac_report *aoac_info)

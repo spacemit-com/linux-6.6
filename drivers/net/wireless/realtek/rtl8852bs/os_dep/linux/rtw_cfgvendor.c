@@ -1735,7 +1735,10 @@ static int rtw_cfgvendor_set_nd_offload(struct wiphy *wiphy,
 
 	return err;
 }
-#ifdef CONFIG_APF
+#ifdef CONFIG_WOW_APF
+/*
+ * https://android.googlesource.com/platform/hardware/interfaces/+/refs/heads/android15-release/wifi/legacy_headers/include/hardware_legacy/wifi_hal.h
+ */
 static int rtw_cfgvendor_get_capabilities(struct wiphy *wiphy,
 	struct wireless_dev *wdev, const void  *data, int len)
 {
@@ -1771,12 +1774,11 @@ static int rtw_cfgvendor_set_packet_filter(struct wiphy *wiphy,
 {
 	struct _ADAPTER *padapter = GET_PRIMARY_ADAPTER(wiphy_to_adapter(wiphy));
 	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
-	struct phl_apf_info *info = &wowpriv->apf_info;
+	struct rtw_apf_info *info = &wowpriv->apf_info;
 	int err = 0, rem, type;
 	u16 apf_prog_len, i;
 	u8 *apf_prog;
 	u8 index;
-	u8 empty_blk[16] = {0};
 	const struct nlattr *iter;
 
 	RTW_INFO("%s()\n", __func__);
@@ -1788,11 +1790,11 @@ static int rtw_cfgvendor_set_packet_filter(struct wiphy *wiphy,
 				apf_prog_len =  nla_get_u32(iter);
 				break;
 			case APF_ATTRIBUTE_PROGRAM:
-#ifdef CONFIG_APF_DBG
+#ifdef CONFIG_WOW_APF_DBG
 				RTW_INFO("[APFDBG] %s() APF_ATTRIBUTE_PROGRAM, len(%u)\n", __func__, apf_prog_len);
-				//RTW_INFO_DUMP(NULL, nla_data(iter), nla_len(iter));
+				RTW_INFO_DUMP(NULL, nla_data(iter), nla_len(iter));
 #endif
-				apf_prog = rtw_zmalloc(apf_prog_len);
+				apf_prog = rtw_vmalloc(apf_prog_len);
 				if (apf_prog != NULL) {
 					_rtw_memcpy(apf_prog, nla_data(iter), apf_prog_len);
 				} else {
@@ -1808,29 +1810,17 @@ static int rtw_cfgvendor_set_packet_filter(struct wiphy *wiphy,
 		}
 	}
 	/* process apf prog */
-	if (apf_prog_len > MAX_APF_RAM_SIZE) {
+	if (apf_prog_len > MAX_APF_PROG_SIZE) {
 		err = -EINVAL;
 		goto exit;
 	}
 
-	if (_rtw_memcmp(apf_prog, empty_blk, 16) == _TRUE && apf_prog_len == MAX_APF_RAM_SIZE) {
-		RTW_INFO("Clear apf ram\n");
-		rtw_apf_cmd_hdl(padapter, PHL_APF_CMD_CLEAR);
-	} else {
-
-		RTW_INFO("Set apf prog\n");
-		_rtw_memcpy(info->ram.buf, apf_prog, apf_prog_len);
-		info->ram.prog_len = apf_prog_len;
-#ifdef CONFIG_APF_DBG_DUMP
-		RTW_INFO("[APFDBG] prog_len(%u)\n", info->ram.prog_len);
-		RTW_INFO_DUMP("[APFDBG] rtw_cfgvendor_set_packet_filter\n", info->ram.buf, info->ram.prog_len);
-#endif
-		rtw_apf_cmd_hdl(padapter, PHL_APF_CMD_CHANGE);
-	}
+	RTW_INFO("Set apf prog\n");
+	rtw_wow_set_apf(padapter, apf_prog, apf_prog_len);
 
 exit:
 	if (apf_prog)
-		rtw_mfree(apf_prog, apf_prog_len);
+		rtw_vmfree(apf_prog, apf_prog_len);
 	return err;
 }
 
@@ -1839,36 +1829,25 @@ static int rtw_cfgvendor_get_packet_filter(struct wiphy *wiphy,
 {
 	struct _ADAPTER *padapter = GET_PRIMARY_ADAPTER(wiphy_to_adapter(wiphy));
 	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
-	struct phl_apf_info *info = &wowpriv->apf_info;
+	struct rtw_apf_info *info = &wowpriv->apf_info;
 	int ret = 0;
-	u32 skb_len = 0;
 	struct sk_buff *skb;
 
 	RTW_INFO("%s()\n", __func__);
-	rtw_apf_cmd_hdl(padapter, PHL_APF_CMD_REPORT);
-	/* Delay for get report */
-	rtw_msleep_os(50);
 	/* Alloc the SKB for vendor_event */
-	skb_len = MAX_APF_RAM_SIZE + sizeof(u32);
-	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, skb_len);
+	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, MAX_APF_PROG_SIZE + sizeof(u32));
 	if (!skb) {
 		RTW_ERR("skb allocation is failed\n");
 		ret = FAIL;
 		goto exit;
 	}
-#ifdef CONFIG_APF_DBG_DUMP
-	RTW_INFO_DUMP("[APFDBG] rtw_cfgvendor_get_packet_filter\n", info->ram.buf, MAX_APF_RAM_SIZE);
-#endif
-	nla_put_u32(skb, APF_ATTRIBUTE_PROGRAM_LEN, MAX_APF_RAM_SIZE);
-	nla_put(skb, APF_ATTRIBUTE_PROGRAM, MAX_APF_RAM_SIZE, info->ram.buf);
-	ret = cfg80211_vendor_cmd_reply(skb);
-	if (ret)
-		RTW_ERR("Vendor Command reply failed ret:%d \n", ret);
+	nla_put_u32(skb, APF_ATTRIBUTE_PROGRAM_LEN, MAX_APF_PROG_SIZE);
+	nla_put(skb, APF_ATTRIBUTE_PROGRAM, MAX_APF_PROG_SIZE, info->apf_prog);
 exit:
 	return ret;
 }
 
-#endif /* CONFIG_APF */
+#endif /* CONFIG_WOW_APF */
 #endif /* CONFIG_RTW_WIFI_HAL */
 
 static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
@@ -2228,7 +2207,7 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		.policy = VENDOR_CMD_RAW_DATA,
 		#endif
 	},
-#ifdef CONFIG_APF
+#ifdef CONFIG_WOW_APF
 	{
 		{
 			.vendor_id = OUI_GOOGLE,
@@ -2262,7 +2241,7 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		.policy = VENDOR_CMD_RAW_DATA,
 #endif
 	},
-#endif /* CONFIG_APF */
+#endif /* CONFIG_WOW_APF */
 #endif /* CONFIG_RTW_WIFI_HAL */
 	{
 		{
