@@ -94,7 +94,7 @@ static void cs_assert(struct spi_driver_data *drv_data)
 	struct chip_data *chip = drv_data->cur_chip;
 
 	if (chip->cs_control) {
-		chip->cs_control(K1X_CS_ASSERT);
+		chip->cs_control(drv_data, K1X_CS_ASSERT);
 		return;
 	}
 
@@ -109,7 +109,7 @@ static void cs_deassert(struct spi_driver_data *drv_data)
 	struct chip_data *chip = drv_data->cur_chip;
 
 	if (chip->cs_control) {
-		chip->cs_control(K1X_CS_DEASSERT);
+		chip->cs_control(drv_data, K1X_CS_DEASSERT);
 		return;
 	}
 
@@ -745,12 +745,29 @@ static int k1x_spi_unprepare_transfer(struct spi_master *master)
 	return 0;
 }
 
+static void k1x_spi_cs_control(struct spi_driver_data *drv_data, u32 command)
+{
+	u32 val;
+
+	val = k1x_spi_read(drv_data, TOP_CTRL);
+	if (command == K1X_CS_ASSERT) {
+		val |= TOP_HOLD_FRAME_LOW;
+	} else {
+		val &= ~(TOP_HOLD_FRAME_LOW);
+	}
+
+	k1x_spi_write(drv_data, TOP_CTRL, val);
+}
+
 static int setup_cs(struct spi_device *spi, struct chip_data *chip)
 {
 	int err = 0;
 
 	if (chip == NULL)
 		return 0;
+
+	chip->cs_control = k1x_spi_cs_control;
+
 	return err;
 }
 

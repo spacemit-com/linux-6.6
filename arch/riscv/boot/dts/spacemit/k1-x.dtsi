@@ -2684,12 +2684,12 @@
 		reg = <0x0 0xD4026000 0x0 0x30>;
 		reg-names = "i2s0";
 		#sound-dai-cells = <0>;
-		clocks = <&ccu CLK_SSPA0>;
-		clock-names = "sspa-clk";
+		clocks = <&ccu CLK_SSPA0_I2S>, <&ccu CLK_SSPA0>;
+		clock-names = "sspa-i2S-clk", "sspa-clk";
 		resets = <&reset RESET_SSPA0>;
 		reset-names = "sspa-rst";
-		assigned-clocks = <&ccu CLK_SSPA0>;
-		assigned-clock-rates = <1536000>;
+		assigned-clocks = <&ccu CLK_SSPA0_I2S>, <&ccu CLK_SSPA0>;
+		assigned-clock-rates = <1536000>, <1536000>;
 		power-domains = <&power K1X_PMU_DUMMY_PWR_DOMAIN>;
 		status = "disabled";
 	};
@@ -2699,13 +2699,28 @@
 		reg = <0x0 0xD4026800 0x0 0x30>;
 		reg-names = "i2s1";
 		#sound-dai-cells = <0>;
-		clocks = <&ccu CLK_SSPA1>;
-		clock-names = "sspa-clk";
+		clocks = <&ccu CLK_SSPA0_I2S>, <&ccu CLK_SSPA1>;
+		clock-names = "sspa-i2S-clk", "sspa-clk";
 		resets = <&reset RESET_SSPA1>;
 		reset-names = "sspa-rst";
-		assigned-clocks = <&ccu CLK_SSPA1>;
-		assigned-clock-rates = <1536000>;
+		assigned-clocks = <&ccu CLK_SSPA0_I2S>, <&ccu CLK_SSPA1>;
+		assigned-clock-rates = <1536000>, <1536000>;
 		power-domains = <&power K1X_PMU_DUMMY_PWR_DOMAIN>;
+		status = "disabled";
+	};
+
+	i2s3: i2s3@d401c000 {
+		compatible = "spacemit,spacemit-i2s3";
+		reg = <0x0 0xd401c000 0x0 0x30>;
+		reg-names = "i2s3";
+		#sound-dai-cells = <0>;
+		clocks = <&ccu CLK_SSP3_I2S>, <&ccu CLK_SSP3>;
+		clock-names = "sspa-i2S-clk", "sspa-clk";
+		resets = <&reset RESET_SSP3>;
+		reset-names = "sspa-rst";
+		assigned-clocks = <&ccu CLK_SSP3_I2S>, <&ccu CLK_SSP3>;
+		assigned-clock-rates = <1536000>, <1536000>;
+		power-domains = <&power K1X_PMU_BUS_PWR_DOMAIN>;
 		status = "disabled";
 	};
 
@@ -2722,6 +2737,15 @@
 		compatible = "spacemit,spacemit-snd-dma1";
 		dmas = <&pdma0 24 1
 			&pdma0 23 1>;
+		dma-names = "rx", "tx";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	i2s3_dma: spacemit-snd-dma3 {
+		compatible = "spacemit,spacemit-snd-dma3";
+		dmas = <&pdma0 DMA_SSP3_RX 1
+			&pdma0 DMA_SSP3_TX 1>;
 		dma-names = "rx", "tx";
 		#sound-dai-cells = <0>;
 		status = "okay";

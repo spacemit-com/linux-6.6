@@ -233,5 +233,9 @@
 #define CLK_PM_MN2_SRC      216
 #define CLK_PM_MN2          217
 
-#define CLK_MAX_NO          218
+#define CLK_SSP3_I2S        218
+#define CLK_SSPA0_I2S       219
+#define CLK_SSPA1_I2S       220
+
+#define CLK_MAX_NO          221
 #endif /* _DT_BINDINGS_CLK_SPACEMIT_K1X_H_ */

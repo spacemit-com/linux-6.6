@@ -20,27 +20,9 @@
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
 #include <sound/dmaengine_pcm.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 #include "spacemit-snd-i2s.h"
-
-//APB Clock/Reset Control Register
-#define APB_CLK_BASE        0xD4015000
-#define APB_SSP0_CLK_RST    0x80
-#define APB_SSP1_CLK_RST    0x84
-#define APB_AIB_CLK_RST     0x3C
-
-#define FNCLKSEL_6p5M       (0x0 << 4)
-#define FNCLKSEL_13M        (0x1 << 4)
-#define FNCLKSEL_26M        (0x2 << 4)
-#define FNCLKSEL_52M        (0x3 << 4)
-#define FNCLKSEL_3p25M      (0x4 << 4)
-#define FNCLKSEL_1p625M     (0x5 << 4)
-#define FNCLKSEL_812p5M     (0x6 << 4)
-#define FNCLKSEL_AUDIO      (0x7 << 4)
-#define CLK_ON_NORST        (0x3 << 0)
-#define CLK_ON_RST          (0x7 << 0)
-#define CLK_ON_26M          (CLK_ON_NORST | FNCLKSEL_26M)
-#define CLK_ON_6p5M         (CLK_ON_NORST | FNCLKSEL_6p5M)
-#define CLK_ON_I2S          ((0x1<<3) | CLK_ON_NORST | FNCLKSEL_AUDIO)
 
 //I2S CLK
 #define  PMUMAIN_BASE       0xD4050000
@@ -64,7 +46,6 @@
 	struct clk	*clk;
 	void __iomem	*mmio_base;
 	void __iomem	*mmio_ctrl_base;
-	void __iomem	*apb_clk_base;
 	void __iomem	*pmumain;
 	unsigned long	phys_base;
 
@@ -256,9 +237,6 @@ static int i2s_sspa_hw_params(struct snd_pcm_substream *substream,
 	unsigned int val, target;
 	unsigned int ssp_top_cfg = 0, data_width = 0, data_bits = 0;
 
-	if (sspa_priv->running_cnt)
-		return 0;
-
 	dma_params = &sspa_priv->dma_params[substream->stream];
 	dma_params->addr = (sspa->phys_base + DATAR);
 
@@ -291,12 +269,15 @@ static int i2s_sspa_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
+	snd_soc_dai_set_dma_data(cpu_dai, substream, dma_params);
+
+	if (sspa_priv->running_cnt)
+		return 0;
+
 	ssp_top_cfg = i2s_sspa_read_reg(sspa, TOP_CTRL);
 	ssp_top_cfg &= ~DW_32BYTE;
 	ssp_top_cfg |= data_width;
 	i2s_sspa_write_reg(sspa, TOP_CTRL, ssp_top_cfg);
-
-	snd_soc_dai_set_dma_data(cpu_dai, substream, dma_params);
 
 	sspa_priv->mclk_fs = sspa_priv->sysclk / (params_rate(params));
 	switch (sspa_priv->mclk_fs) {
@@ -339,6 +320,11 @@ static int i2s_sspa_hw_params(struct snd_pcm_substream *substream,
 	val = __raw_readl(sspa->pmumain + SYSCLK_PRE_CTRL);
 	val |= 1 << 29;
 	__raw_writel(val, sspa->pmumain + SYSCLK_PRE_CTRL);
+
+	ssp_top_cfg = i2s_sspa_read_reg(sspa, 0x24);
+	ssp_top_cfg |= BIT(0);
+	i2s_sspa_write_reg(sspa, 0x24, ssp_top_cfg);
+
 	return 0;
 }
 
@@ -401,23 +387,10 @@ static int i2s_sspa_trigger(struct snd_pcm_substream *substream, int cmd,
 static int i2s_sspa_probe(struct snd_soc_dai *dai)
 {
 	struct sspa_priv *priv = dev_get_drvdata(dai->dev);
-	struct ssp_device *sspa = priv->sspa;
-	unsigned int sspa_clk = 0;
 
-	if (dai->id == 0)
-	{
-		//i2s0
-		sspa_clk = __raw_readl(sspa->apb_clk_base + APB_SSP0_CLK_RST);
-		__raw_writel((1 << 3)|sspa_clk, sspa->apb_clk_base + APB_SSP0_CLK_RST);
-	} else {
-		//i2s1
-		sspa_clk = __raw_readl(sspa->apb_clk_base + APB_SSP1_CLK_RST);
-		__raw_writel((1 << 3)|sspa_clk, sspa->apb_clk_base + APB_SSP1_CLK_RST);
-	}
 	reset_control_deassert(priv->sspa_rst);
 	snd_soc_dai_set_drvdata(dai, priv);
 	return 0;
-
 }
 
 #define I2S_SSPA_RATES SNDRV_PCM_RATE_8000_192000
@@ -458,6 +431,24 @@ static struct snd_soc_dai_driver i2s0_sspa_dai = {
 static struct snd_soc_dai_driver i2s1_sspa_dai = {
 	.name = "i2s1-dai",
 	.id = 1,
+	.playback = {
+		.channels_min = 1,
+		.channels_max = 2,
+		.rates = SNDRV_PCM_RATE_48000,
+		.formats = I2S_SSPA_FORMATS,
+	},
+	.capture = {
+		.channels_min = 1,
+		.channels_max = 2,
+		.rates = SNDRV_PCM_RATE_48000,
+		.formats = I2S_SSPA_FORMATS,
+	},
+	.ops = &i2s_sspa_dai_ops,
+};
+
+static struct snd_soc_dai_driver i2s3_sspa_dai = {
+	.name = "i2s3-dai",
+	.id = 3,
 	.playback = {
 		.channels_min = 1,
 		.channels_max = 2,
@@ -519,18 +510,7 @@ static int i2s_sspa_resume(struct device *dev)
 {
 	struct sspa_priv *priv = dev_get_drvdata(dev);
 	struct ssp_device *sspa = priv->sspa;
-	unsigned int sspa_clk = 0;
 
-	if (priv->dai_id_pre == 0)
-	{
-		//i2s0
-		sspa_clk = __raw_readl(sspa->apb_clk_base + APB_SSP0_CLK_RST);
-		__raw_writel((1 << 3)|sspa_clk, sspa->apb_clk_base + APB_SSP0_CLK_RST);
-	} else {
-		//i2s1
-		sspa_clk = __raw_readl(sspa->apb_clk_base + APB_SSP1_CLK_RST);
-		__raw_writel((1 << 3)|sspa_clk, sspa->apb_clk_base + APB_SSP1_CLK_RST);
-	}
 	reset_control_deassert(priv->sspa_rst);
 
 	if (i2s_sspa_read_reg(sspa, TOP_CTRL) == 0) {
@@ -546,11 +526,21 @@ static const struct snd_soc_component_driver i2s_sspa_component = {
 	.name 			= "spacemit-dmasspa-dai",
 };
 
+#ifdef CONFIG_OF
+static const struct of_device_id spacemit_i2s_ids[] = {
+	{ .compatible = "spacemit,spacemit-i2s0", .data = (void *)&i2s0_sspa_dai},
+	{ .compatible = "spacemit,spacemit-i2s1", .data = (void *)&i2s1_sspa_dai},
+	{ .compatible = "spacemit,spacemit-i2s3", .data = (void *)&i2s3_sspa_dai},
+	{ /* sentinel */ }
+};
+#endif
+
 static int asoc_i2s_sspa_probe(struct platform_device *pdev)
 {
 	struct sspa_priv *priv;
 	struct resource *res;
 	struct snd_soc_dai_driver *dai;
+	const struct of_device_id *match;
 
 	pr_debug("%s enter: dev name %s\n", __func__, dev_name(&pdev->dev));
 	priv = devm_kzalloc(&pdev->dev,
@@ -585,10 +575,6 @@ static int asoc_i2s_sspa_probe(struct platform_device *pdev)
 
 	priv->sspa->phys_base = res->start;
 
-	if ((priv->sspa->apb_clk_base = ioremap(APB_CLK_BASE, 0x100)) == NULL) {
-		pr_err("sspa ioremap err\n");
-		return -1;
-	}
 	if ((priv->sspa->pmumain = ioremap(PMUMAIN_BASE, 0x100)) == NULL) {
 		pr_err("sspa pmumain ioremap err\n");
 		return -1;
@@ -603,12 +589,13 @@ static int asoc_i2s_sspa_probe(struct platform_device *pdev)
 
 	priv->dai_fmt = (unsigned int) -1;
 	platform_set_drvdata(pdev, priv);
-	pr_debug("exit %s\n", __FUNCTION__);
-	if (of_device_is_compatible(pdev->dev.of_node, "spacemit,spacemit-i2s0")) {
+
+	match = of_match_device(spacemit_i2s_ids, &pdev->dev);
+	if (match)
+		dai = (struct snd_soc_dai_driver *)match->data;
+	else
 		dai = &i2s0_sspa_dai;
-	} else {
-		dai = &i2s1_sspa_dai;
-	}
+
 	return devm_snd_soc_register_component(&pdev->dev, &i2s_sspa_component, dai, 1);
 }
 
@@ -622,14 +609,6 @@ static int asoc_i2s_sspa_remove(struct platform_device *pdev)
 
 	return 0;
 }
-
-#ifdef CONFIG_OF
-static const struct of_device_id spacemit_i2s_ids[] = {
-	{ .compatible = "spacemit,spacemit-i2s0", },
-	{ .compatible = "spacemit,spacemit-i2s1", },
-	{ /* sentinel */ }
-};
-#endif
 
 static struct platform_driver asoc_i2s_sspa_driver = {
 	.driver = {

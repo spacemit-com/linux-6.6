@@ -228,7 +228,7 @@ struct chip_data {
 	int gpio_cs_inverted;
 	int (*write)(struct spi_driver_data *drv_data);
 	int (*read)(struct spi_driver_data *drv_data);
-	void (*cs_control)(u32 command);
+	void (*cs_control)(struct spi_driver_data *drv_data, u32 command);
 };
 
 static inline u32 k1x_spi_read(const struct spi_driver_data *drv_data,
