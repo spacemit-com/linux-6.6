@@ -445,6 +445,10 @@ DEFINE_EVENT(dpu_ctrl_template, saturn_ctrl_sw_start,
 	TP_ARGS(id, enable)
 );
 
+DEFINE_EVENT(dpu_ctrl_template, saturn_ctl_cmd_update,
+	TP_PROTO(int id, int enable),
+	TP_ARGS(id, enable)
+);
 
 TRACE_EVENT(saturn_conf_scaler_x,
 	TP_PROTO(struct spacemit_plane_state *state),

@@ -19,7 +19,8 @@
 
 #define SPACEMIT_DSI_MAX_TX_FIFO_BYTES	256
 #define SPACEMIT_DSI_MAX_RX_FIFO_BYTES	64
-#define SPACEMIT_DSI_MAX_CMD_FIFO_BYTES	1024
+#define SPACEMIT_DSI_MAX_CMD_FIFO_BYTES	512
+#define SPACEMIT_DSI_MAX_CMD_PKT_BYTES	256
 
 #define to_dsi_bcnt(timing, bpp)        (((timing) * (bpp)) >> 3)
 
@@ -479,24 +480,20 @@ static void dsi_config_video_mode(struct spacemit_dsi_device *dsi_ctx, struct sp
 static void dsi_config_cmd_mode(struct spacemit_dsi_device *dsi_ctx, struct spacemit_mipi_info *mipi_info)
 {
 	int reg;
-	int rgb_mode, bpp;
+	int rgb_mode;
 
 	switch(mipi_info -> rgb_mode){
 	case DSI_INPUT_DATA_RGB_MODE_565:
-		bpp = 16;
 		rgb_mode = 2;
 		break;
 	case DSI_INPUT_DATA_RGB_MODE_666UNPACKET:
-		bpp = 18;
 		rgb_mode = 1;
 		break;
 	case DSI_INPUT_DATA_RGB_MODE_888:
-		bpp = 24;
 		rgb_mode = 0;
 		break;
 	default:
 		pr_err("%s: unsupported rgb format!\n", __func__);
-		bpp = 24;
 		rgb_mode = 0;
 	}
 
@@ -507,7 +504,7 @@ static void dsi_config_cmd_mode(struct spacemit_dsi_device *dsi_ctx, struct spac
 			0 << CFG_CPN_ADDR0_EN_SHIFT;
 	dsi_write(dsi_ctx->base_addr, DSI_CPN_CMD, reg);
 
-	reg = mipi_info->width * bpp / 8 << CFG_CPN_PKT_CNT_SHIFT |
+	reg = SPACEMIT_DSI_MAX_CMD_PKT_BYTES << CFG_CPN_PKT_CNT_SHIFT |
 		SPACEMIT_DSI_MAX_CMD_FIFO_BYTES << CFG_CPN_FIFO_FULL_LEVEL_SHIFT;
 	dsi_write(dsi_ctx->base_addr, DSI_CPN_CTRL_1,reg);
 
@@ -747,6 +744,10 @@ int spacemit_dsi_open(struct spacemit_dsi_device* device_ctx, bool ready)
 		dsi_enable_lptx_lanes(device_ctx->base_addr, spacemit_dsi_lane[lane_number]);
 		dsi_enable_eotp(device_ctx->base_addr, mipi_info->eotp_enable);
 	}
+
+	/* set vc channel = 0 in cmd mode */
+	if (mipi_info->work_mode == SPACEMIT_DSI_MODE_CMD)
+		dsi_clear_bits(device_ctx->base_addr, DSI_CTRL_1, CFG_CPN_VCH_NO_0 | CFG_CPN_VCH_NO_1);
 
 	dsi_enable_irq(device_ctx->base_addr, true);
 

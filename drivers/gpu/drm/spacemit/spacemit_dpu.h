@@ -34,6 +34,11 @@
 #define DPU_INT_OVERRUN		BIT(3)
 #define DPU_INT_WBDONE		BIT(4)
 
+#define CFG_DSI_HCLK_DIS	BIT(8)
+#define CFG_CPN_EN			BIT(1)
+#define CFG_VPN_EN			BIT(0)
+#define SPARE_CFG_OFFSET	0x0018
+
 #define N_SCALER_MAX			5
 #define N_DMA_CHANNEL_MAX		12
 #define N_DMA_LAYER_MAX			16
@@ -116,6 +121,12 @@ struct dpu_clk_context {
 	struct clk *hmclk;
 };
 
+enum spacemit_dpu_work_mode {
+	SPACEMIT_DPU_MODE_VIDEO = 0,
+	SPACEMIT_DPU_MODE_CMD = 1,
+	SPACEMIT_DPU_MODE_MAX
+};
+
 struct spacemit_dpu {
 	struct device *dev;
 	struct drm_crtc crtc;
@@ -150,6 +161,7 @@ struct spacemit_dpu {
 	struct reset_control *esc_reset;
 	struct reset_control *hdmi_reset;
 	struct gpio_desc *enable_gpio;
+	unsigned int work_mode;
 
 #ifdef CONFIG_SPACEMIT_DEBUG
 	bool (*is_dpu_running)(struct spacemit_dpu* dpu);
