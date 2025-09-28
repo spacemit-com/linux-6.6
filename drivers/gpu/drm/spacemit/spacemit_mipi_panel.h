@@ -76,6 +76,7 @@ struct spacemit_panel {
 	struct regulator *vdd_2v8;
 	u32 gpio_reset;
 	u32 gpio_bl;
+	u32 gpio_switch;
 	u32 gpio_dc[2];
 	u32 gpio_avdd[2];
 	atomic_t enable_refcnt;
