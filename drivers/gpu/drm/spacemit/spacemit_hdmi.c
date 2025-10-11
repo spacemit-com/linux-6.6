@@ -77,6 +77,7 @@ struct spacemit_hdmi {
 	bool use_no_edid;
 	struct hdmi_data_info *hdmi_data;
 	struct drm_display_mode previous_mode;
+	struct drm_display_mode preferred_mode;
 };
 
 #define encoder_to_spacemit_hdmi(encoder) \
@@ -581,8 +582,9 @@ void hdmi_write_bits(struct spacemit_hdmi *hdmi, u16 offset, u32 value, u32 mask
 	writel_relaxed(reg_val, hdmi->regs + (offset));
 }
 
-void hdmi_init (struct spacemit_hdmi *hdmi, int pixel_clock, int bit_depth){
+static int hdmi_init (struct spacemit_hdmi *hdmi, int pixel_clock, int bit_depth){
 	u32 value = 0;
+	int timeout;
 	int color_depth = bit_depth == EIGHT_BPP ? 4 : 5;
 
 	u32 good_phase = 0x00;
@@ -604,18 +606,28 @@ void hdmi_init (struct spacemit_hdmi *hdmi, int pixel_clock, int bit_depth){
 	DRM_DEBUG("%s() hdmi 0x34 0x%x\n", __func__, value);
 
 	pll_reg(hdmi, pixel_clock, bit_depth);
+	writel(0x0, hdmi->regs + 0xe4);
 	writel(0x03, hdmi->regs + 0xe4);
+	// wait for hdmi pll lock
+	timeout = 100;
+	while(timeout) {
+		if ((readl(hdmi->regs + 0xe4) & BIT(16)) != 0)
+			break;
+		mdelay(2);
+		timeout--;
+	};
 	value = readl_relaxed(hdmi->regs + 0xe4);
 	DRM_DEBUG("%s() hdmi pll lock status 0x%x\n", __func__, value);
-	// while ( (value & 0x10000) != 0) {
-	// 	value = readl_relaxed(hdmi->regs + 0xe4);
-	// }
-	udelay(100);
 
-	// value = 0x3018C000 | bit_depth;
 	value = 0x1C208000 | bit_depth;
 	writel(value, hdmi->regs + 0x28);
 	DRM_DEBUG("%s() hdmi 0x28 0x%x\n", __func__, value);
+
+	if (timeout == 0) {
+		DRM_INFO("%s wait hdmi pll lock timeout\n", __func__);
+		return -1;
+	} else
+		return 0;
 }
 
 static int spacemit_hdmi_setup(struct spacemit_hdmi *hdmi,
@@ -625,6 +637,7 @@ static int spacemit_hdmi_setup(struct spacemit_hdmi *hdmi,
 	struct hdmi_data_info *hdmi_data = hdmi->hdmi_data;
 	int bit_depth = EIGHT_BPP;
 	u32 value;
+	int ret;
 
 	DRM_DEBUG("%s() \n", __func__);
 
@@ -657,7 +670,11 @@ static int spacemit_hdmi_setup(struct spacemit_hdmi *hdmi,
 		DRM_INFO("%s() id 0x%x, hdmi 10bpc \n", __func__, value);
 	}
 
-	hdmi_init(hdmi, hdmi->previous_mode.clock, bit_depth);
+	ret = hdmi_init(hdmi, hdmi->previous_mode.clock, bit_depth);
+	if ((ret < 0) && (bit_depth == EIGHT_BPP)) {
+		bit_depth = TEN_BPP;
+		hdmi_init(hdmi, hdmi->previous_mode.clock, bit_depth);
+	}
 
 	spacemit_hdmi_config_video_timing(hdmi, mode);
 	spacemit_hdmi_config_video_avi(hdmi, mode);
@@ -676,7 +693,12 @@ static void spacemit_hdmi_encoder_mode_set(struct drm_encoder *encoder,
 	DRM_DEBUG("%s() \n", __func__);
 
 	/* Store the display mode for plugin/DPMS poweron events */
-	drm_mode_copy(&hdmi->previous_mode, adj_mode);
+	if (adj_mode->hdisplay == hdmi->preferred_mode.hdisplay &&
+	    adj_mode->vdisplay == hdmi->preferred_mode.vdisplay &&
+		drm_mode_vrefresh(adj_mode) > 60)
+		drm_mode_copy(&hdmi->previous_mode, &hdmi->preferred_mode);
+	else
+		drm_mode_copy(&hdmi->previous_mode, adj_mode);
 }
 
 static void spacemit_hdmi_encoder_enable(struct drm_encoder *encoder)
@@ -796,6 +818,7 @@ static int spacemit_hdmi_connector_get_modes(struct drm_connector *connector)
 	int ret;
 	struct edid *edid;
 	uint32_t value;
+	struct drm_display_mode *mode;
 
 	DRM_DEBUG("%s() \n", __func__);
 
@@ -816,6 +839,17 @@ static int spacemit_hdmi_connector_get_modes(struct drm_connector *connector)
 		if (hdmi->edid_done) {
 			drm_connector_update_edid_property(connector, edid);
 			ret = drm_add_edid_modes(connector, edid);
+			if (ret > 0) {
+				list_for_each_entry(mode, &connector->probed_modes, head) {
+					if (mode->hdisplay == 1920 &&
+						mode->vdisplay == 1080 &&
+						(drm_mode_vrefresh(mode) == 60)) {
+						DRM_INFO("setting 1920x1080@60Hz as preferred mode\n");
+						drm_mode_copy(&hdmi->preferred_mode, mode);
+						break;
+					}
+				}
+			}
 		} else {
 			ret = drm_add_modes_noedid(connector, 1920, 1080);
 		}
