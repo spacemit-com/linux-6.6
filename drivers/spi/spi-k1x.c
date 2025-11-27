@@ -784,7 +784,7 @@ static int setup(struct spi_device *spi)
 	/* Only alloc on first setup */
 	chip = spi_get_ctldata(spi);
 	if (!chip) {
-		chip = devm_kzalloc(&spi->dev, sizeof(struct chip_data),
+		chip = devm_kzalloc(&spi->master->dev, sizeof(struct chip_data),
 				GFP_KERNEL);
 		if (!chip)
 			return -ENOMEM;
@@ -859,7 +859,7 @@ static void cleanup(struct spi_device *spi)
 	if (gpio_is_valid(chip->gpio_cs))
 		gpio_free(chip->gpio_cs);
 
-	devm_kfree(&spi->dev, chip);
+	devm_kfree(&spi->master->dev, chip);
 }
 
 static const struct of_device_id k1x_spi_dt_ids[] = {
