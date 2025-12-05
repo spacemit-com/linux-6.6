@@ -13,6 +13,8 @@
 #include <linux/clk.h>
 #include <linux/reset.h>
 #include <linux/delay.h>
+#include <linux/debugfs.h>
+#include <linux/usb.h>
 
 #define SPACEMIT_COMBPHY_WAIT_TIMEOUT 1000
 #define SPACEMIT_COMBPHY_MODE_SEL BIT(3)
@@ -32,6 +34,17 @@
 #define SPACEMIT_COMBPHY_USB_TERM_SHORT 0x3000
 #define SPACEMIT_COMBPHY_USB_LFPS_THRES_DEFAULT (0x3)
 
+#define SPACEMIT_COMBPHY_DRIVER_SOC_REG 0x60
+#define SPACEMIT_COMBPHY_DRIVER_SOC_OVRD BIT(14)
+#define SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_MASK GENMASK(9, 8)
+#define SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP(val) \
+	(((val) << 8) & SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_MASK)
+#define SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_DEFAULT 1
+#define SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_MASK GENMASK(5, 4)
+#define SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP(val) \
+	(((val) << 4) & SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_MASK)
+#define SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_DEFAULT 2
+
 struct spacemit_combphy_priv;
 
 struct spacemit_combphy_priv {
@@ -45,12 +58,15 @@ struct spacemit_combphy_priv {
 	u8 type;
 	bool rx_always_on;
 	u8 lfps_thres;
+	u8 amp_soc;
+	u8 post_c_soc;
 };
 
 static inline void spacemit_reg_updatel(void __iomem *reg, u32 offset, u32 mask,
 					u32 val)
 {
 	u32 tmp;
+
 	tmp = readl(reg + offset);
 	tmp = (tmp & ~(mask)) | val;
 	writel(tmp, reg + offset);
@@ -60,11 +76,12 @@ static int spacemit_combphy_wait_ready(struct spacemit_combphy_priv *priv,
 					   u32 offset, u32 mask, u32 val)
 {
 	int timeout = SPACEMIT_COMBPHY_WAIT_TIMEOUT;
+
 	while (((readl(priv->puphy_base + offset) & mask) != val) && --timeout)
 		;
-	if (!timeout) {
+	if (!timeout)
 		return -ETIMEDOUT;
-	}
+
 	dev_dbg(priv->dev, "phy init timeout remain: %d", timeout);
 	return 0;
 }
@@ -72,6 +89,7 @@ static int spacemit_combphy_wait_ready(struct spacemit_combphy_priv *priv,
 static int spacemit_combphy_set_mode(struct spacemit_combphy_priv *priv)
 {
 	u8 mode = priv->type;
+
 	if (mode == PHY_TYPE_USB3) {
 		spacemit_reg_updatel(priv->phy_sel, 0, 0,
 					 SPACEMIT_COMBPHY_MODE_SEL);
@@ -86,7 +104,26 @@ static int spacemit_combphy_init_usb(struct spacemit_combphy_priv *priv)
 {
 	int ret;
 	void __iomem *base = priv->puphy_base;
+
 	dev_info(priv->dev, "USB3 PHY init.\n");
+
+	if (priv->amp_soc != SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_DEFAULT ||
+	    priv->post_c_soc != SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_DEFAULT) {
+		dev_info(priv->dev, "tx amp: %d, de-emp: %d\n", priv->amp_soc,
+			 priv->post_c_soc);
+
+		spacemit_reg_updatel(base, SPACEMIT_COMBPHY_DRIVER_SOC_REG,
+				     SPACEMIT_COMBPHY_DRIVER_SOC_OVRD,
+				     SPACEMIT_COMBPHY_DRIVER_SOC_OVRD);
+		spacemit_reg_updatel(
+			base, SPACEMIT_COMBPHY_DRIVER_SOC_REG,
+			SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_MASK,
+			SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP(priv->amp_soc));
+		spacemit_reg_updatel(
+			base, SPACEMIT_COMBPHY_DRIVER_SOC_REG,
+			SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_MASK,
+			SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP(priv->post_c_soc));
+	}
 
 	writel(SPACEMIT_COMBPHY_USB_REG1_VAL, base + SPACEMIT_COMBPHY_USB_REG1);
 	writel(SPACEMIT_COMBPHY_USB_REG2_VAL, base + SPACEMIT_COMBPHY_USB_REG2);
@@ -100,9 +137,8 @@ static int spacemit_combphy_init_usb(struct spacemit_combphy_priv *priv)
 	dev_info(priv->dev, "USB3 PHY init lfps thres %d\n", priv->lfps_thres);
 	spacemit_reg_updatel(base, 0x58, (0x7 << 8), ((priv->lfps_thres) << 8));
 
-	if (priv->rx_always_on) {
+	if (priv->rx_always_on)
 		spacemit_reg_updatel(base, 0x18, 0x3000, SPACEMIT_COMBPHY_USB_TERM_SHORT);
-	}
 
 	if (ret)
 		dev_err(priv->dev, "USB3 PHY init timeout!\n");
@@ -184,9 +220,8 @@ static struct phy *spacemit_combphy_xlate(struct device *dev,
 
 	priv->type = args->args[0];
 
-	if (args->args_count > 1) {
+	if (args->args_count > 1)
 		dev_dbg(dev, "combo phy idx: %d selected",  args->args[1]);
-	}
 
 	return priv->phy;
 }
@@ -196,6 +231,65 @@ static const struct phy_ops spacemit_combphy_ops = {
 	.exit = spacemit_combphy_exit,
 	.owner = THIS_MODULE,
 };
+
+int spacemit_combphy_registers_show(struct seq_file *s, void *unused)
+{
+	struct spacemit_combphy_priv *priv = s->private;
+	void __iomem *base = priv->puphy_base;
+	u32 value;
+
+	struct {
+		u32 offset;
+		const char *reg_name;
+	} regs[] = {
+		{ 0x00, "version" },
+		{ 0x08, "cfg_phy_init_clk_pll" },
+		{ 0x18, "cfg_pu_rx_retry_term" },
+		{ 0x48, "cfg_pll_ssc_fref_ref_ana" },
+		{ 0x50, "cfg_ana_rc_cali_rterm_ana_rx10" },
+		{ 0x54, "cfg_ppm_sel_intp_ana_ck_cdr_en_lp" },
+		{ 0x58, "cfg_rcell_adj_pw_en_pd_rc_lfps_iset_intp" },
+		{ 0x60, "cfg_ovrd_post_amp_post_lane_disable" },
+		{ 0x68, "cfg_pattern_force_en_cdr_chk" },
+	};
+
+	for (size_t i = 0; i < ARRAY_SIZE(regs); i++) {
+		value = readl(base + regs[i].offset);
+		seq_printf(s, "0x%03x: 0x%08x (%s)\n", regs[i].offset, value,
+			   regs[i].reg_name);
+	}
+	seq_puts(s, "Registers 0x0~0x3b0:\n");
+	for (u32 offset = 0x0; offset < 0x3b0; offset += 0x10) {
+		seq_printf(s, "0x%03x: ", offset);
+		for (u32 step = 0; step < 0x10; step += 0x4) {
+			value = readl(base + offset + step);
+			seq_printf(s, "0x%08x ", value);
+		}
+		seq_puts(s, "\n");
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(spacemit_combphy_registers);
+
+static void spacemit_combphy_debugfs_remove(void *root)
+{
+	debugfs_remove_recursive(root);
+}
+
+static void spacemit_combphy_debugfs_init(struct platform_device *pdev)
+{
+	struct dentry *root;
+	struct spacemit_combphy_priv *priv = dev_get_drvdata(&pdev->dev);
+
+	root = debugfs_create_dir(kobject_name(&pdev->dev.kobj),
+				  usb_debug_root);
+	debugfs_create_file("registers", 0400, root, priv,
+			    &spacemit_combphy_registers_fops);
+
+	devm_add_action_or_reset(&pdev->dev,
+				 spacemit_combphy_debugfs_remove, root);
+}
 
 static int spacemit_combphy_probe(struct platform_device *pdev)
 {
@@ -220,6 +314,10 @@ static int spacemit_combphy_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	priv->amp_soc = SPACEMIT_COMBPHY_DRIVER_SOC_TXAMP_DEFAULT;
+	device_property_read_u8(&pdev->dev, "amp-soc", &priv->amp_soc);
+	priv->post_c_soc = SPACEMIT_COMBPHY_DRIVER_SOC_DEEMP_DEFAULT;
+	device_property_read_u8(&pdev->dev, "post-c-soc", &priv->post_c_soc);
 	priv->lfps_thres = SPACEMIT_COMBPHY_USB_LFPS_THRES_DEFAULT;
 	device_property_read_u8(&pdev->dev, "lfps-threshold", &priv->lfps_thres);
 
@@ -245,6 +343,8 @@ static int spacemit_combphy_probe(struct platform_device *pdev)
 
 	phy_provider =
 		devm_of_phy_provider_register(dev, spacemit_combphy_xlate);
+
+	spacemit_combphy_debugfs_init(pdev);
 
 	return PTR_ERR_OR_ZERO(phy_provider);
 }
