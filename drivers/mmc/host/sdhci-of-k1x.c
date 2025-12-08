@@ -1229,7 +1229,7 @@ static int spacemit_sdhci_execute_sw_tuning(struct sdhci_host *host, u32 opcode)
 	if ((host->mmc->caps2 & MMC_CAP2_NO_MMC) || (host->quirks2 & SDHCI_QUIRK2_BROKEN_PHY_MODULE)) {
 		spacemit_sw_tx_set_dlinereg(host, pdata->tx_dline_reg);
 		spacemit_sw_tx_set_delaycode(host, pdata->tx_delaycode);
-		pr_info("%s: set tx_delaycode: %d\n", mmc_hostname(mmc), pdata->tx_delaycode);
+		pr_info("%s: set tx_delaycode: 0x%02x\n", mmc_hostname(mmc), pdata->tx_delaycode);
 		spacemit_sw_tx_tuning_prepare(host);
 	}
 
@@ -1514,7 +1514,7 @@ static int spacemit_cpufreq_transition(struct notifier_block *nb,
 			 mmc_hostname(mmc), freq->new);
 		if (pdata->tx_need_update) {
 			spacemit_sw_tx_set_delaycode(host, pdata->tx_delaycode);
-			pr_info("%s: update tx delaycode: %d\n",
+			pr_info("%s: update tx delaycode: 0x%02x\n",
 				mmc_hostname(mmc), pdata->tx_delaycode);
 			atomic_dec(&pdata->ref_count);
 			wake_up(&pdata->wait_queue);
@@ -1527,8 +1527,23 @@ static int spacemit_cpufreq_transition(struct notifier_block *nb,
 
 static inline int spacemit_cpufreq_register(struct sdhci_host *host)
 {
+	struct mmc_host *mmc = host->mmc;
+	struct k1x_sdhci_platdata *pdata = mmc->parent->platform_data;
+	unsigned long voltage;
+	unsigned int clk_rate;
+
 	if (host->mmc->caps2 & MMC_CAP2_NO_SDIO)
 		return 0;
+
+	clk_rate = cpufreq_generic_get(0);
+	if (clk_rate) {
+		voltage = get_voltage_from_freq(clk_rate);
+		if (voltage <= SPLIT_VOLTAGE)
+			pdata->tx_delaycode = pdata->tx_delaycode_array[1];
+		else
+			pdata->tx_delaycode = pdata->tx_delaycode_array[0];
+		pr_info("%s: init tx delaycode: 0x%02x\n", mmc_hostname(mmc), pdata->tx_delaycode);
+	}
 
 	host->freq_transition.notifier_call = spacemit_cpufreq_transition;
 
@@ -1804,6 +1819,13 @@ static int spacemit_sdhci_probe(struct platform_device *pdev)
 		goto err_of_parse;
 
 	spacemit_get_of_property(host, dev, pdata);
+	if (!(host->mmc->caps2 & MMC_CAP2_NO_SDIO)
+		&& (pdata->tx_delaycode_cnt != 2)) {
+		dev_err(dev, "failed to get valid tx delaycode array\n");
+		ret = -ENODATA;
+		goto err_of_parse;
+	}
+
 	if (pdata->quirks)
 		host->quirks |= pdata->quirks;
 	if (pdata->quirks2)
