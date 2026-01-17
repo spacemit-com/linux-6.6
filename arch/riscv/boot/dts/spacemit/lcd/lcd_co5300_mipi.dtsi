@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/ { lcds: lcds {
+	lcd_co5300_mipi: lcd_co5300_mipi {
+		dsi-work-mode = <0>; /* dsi: 0 cmd mode; 1 video burst mode; 2 video sync pulse mode; 3 video sync event mode */
+		dsi-lane-number = <1>;
+		dsi-color-format = "rgb888";
+		width-mm = <34>;
+		height-mm = <34>;
+		use-dcs-write;
+
+		/*mipi info*/
+		height = <466>;
+		width = <466>;
+		hfp = <40>;
+		hbp = <120>;
+		hsync = <10>;
+		vfp = <5>;
+		vbp = <10>;
+		vsync = <2>;
+		fps = <60>;
+		work-mode = <1>; /* spacemit dsi config: 0 video mode; 1 cmd mode */
+		rgb-mode = <3>;
+		lane-number = <1>;
+		phy-bit-clock = <500000000>;
+		phy-esc-clock = <51200000>;
+		split-enable = <0>;
+		eotp-enable = <0>;
+		burst-mode = <2>; /* spacemit video burst mode config: 0 sync pulse; 1 sync event; 2 burst mode */
+		esd-check-enable = <0>;
+
+		/* DSI_CMD, DSI_MODE, timeout, len, cmd */
+		initial-command = [
+			15 01 00 02 FE 00
+			// 15 01 00 02 C4 80
+			// 15 01 00 02 3A 77
+			15 01 00 02 35 00
+			15 01 00 02 53 20
+			15 01 00 02 51 FF
+			15 01 00 02 63 FF
+			39 01 00 05 2A 00 06 01 D7
+			39 01 00 05 2B 00 00 01 D1
+			05 01 78 01 11
+			05 01 3C 01 29
+		];
+		sleep-in-command = [
+			05 01 78 01 28
+			05 01 3C 01 10
+		];
+		sleep-out-command = [
+			05 01 78 01 11
+			05 01 3C 01 29
+		];
+		read-id-command = [
+			37 01 00 01 03
+			14 01 00 03 DA DB DC
+		];
+
+		display-timings {
+			timing0 {
+				clock-frequency = <20480000>;
+				hactive = <466>;
+				hfront-porch = <40>;
+				hback-porch = <120>;
+				hsync-len = <10>;
+				vactive = <466>;
+				vfront-porch = <5>;
+				vback-porch = <10>;
+				vsync-len = <2>;
+				vsync-active = <1>;
+				hsync-active = <1>;
+			};
+		};
+	};
+};};

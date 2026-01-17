@@ -1597,6 +1597,7 @@ config SERIAL_NUVOTON_MA35D1_CONSOLE
 config WK2XXX_SPI
 	tristate "WK2XXX SPI to serial port support"
 	select SERIAL_CORE
+	default n
 	help
 	  Say yes here to provide access to WK2XXX SPI to serial port
 

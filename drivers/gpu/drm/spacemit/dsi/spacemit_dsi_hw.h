@@ -12,6 +12,8 @@
 
 #define DSI_CTRL_0 0x0
 #define DSI_CTRL_1 0x4
+#define CFG_CPN_VCH_NO_0 BIT(6)
+#define CFG_CPN_VCH_NO_1 BIT(7)
 #define DSI_IRQ_ST1  0x8
 #define DSI_IRQ_MASK1 0xC
 #define DSI_IRQ_ST 0x10

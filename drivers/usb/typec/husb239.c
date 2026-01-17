@@ -481,9 +481,6 @@ static int husb239_usbpd_detect(struct husb239 *husb239)
 		msleep(50);
 	}
 
-	if (count == 0)
-		return -EINVAL;
-
 	return 0;
 }
 

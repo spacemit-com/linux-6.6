@@ -859,7 +859,7 @@ static void cleanup(struct spi_device *spi)
 	if (gpio_is_valid(chip->gpio_cs))
 		gpio_free(chip->gpio_cs);
 
-	devm_kfree(&spi->dev, chip);
+	devm_kfree(&spi->master->dev, chip);
 }
 
 static const struct of_device_id k1x_spi_dt_ids[] = {

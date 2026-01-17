@@ -402,8 +402,8 @@ static int aicbsp_platform_power_on(void)
 static void aicbsp_platform_power_off(void)
 {
 #ifdef CONFIG_PLATFORM_SPACEMIT
-	spacemit_sdio_detect_change(0);
 	spacemit_wlan_set_power("sdio", 0);
+	spacemit_sdio_detect_change(0);
 #endif
 	bsp_dbg("%s\n", __func__);
 }

@@ -71,6 +71,8 @@ static void mv_udc_disable(struct mv_udc *udc);
 
 static void nuke(struct mv_ep *ep, int status);
 static void stop_activity(struct mv_udc *udc, struct usb_gadget_driver *driver);
+static void ep0_stall(struct mv_udc *udc);
+static void mv_set_ptc(struct mv_udc *udc, u32 mode);
 
 /* for endpoint 0 operations */
 static const struct usb_endpoint_descriptor mv_ep0_desc = {
@@ -221,6 +223,104 @@ int mv_udc_registers_show(struct seq_file *s, void *unused)
 }
 DEFINE_SHOW_ATTRIBUTE(mv_udc_registers);
 
+static int mv_udc_testmode_show(struct seq_file *s, void *unused)
+{
+	struct mv_udc *udc = s->private;
+	unsigned long flags;
+	u32 portsc = 0;
+
+	spin_lock_irqsave(&udc->lock, flags);
+
+	portsc = readl(&udc->op_regs->portsc[0]);
+
+	spin_unlock_irqrestore(&udc->lock, flags);
+
+	seq_printf(s, "PORTSC(base+capoff+68): 0x%x\n", portsc);
+
+	portsc = (portsc & (0x7 << 16)) >> 16;
+	switch (portsc) {
+	case 0:
+		seq_puts(s, "no test\n");
+		break;
+	case USB_TEST_J:
+		seq_puts(s, "test_j\n");
+		break;
+	case USB_TEST_K:
+		seq_puts(s, "test_k\n");
+		break;
+	case USB_TEST_SE0_NAK:
+		seq_puts(s, "test_se0_nak\n");
+		break;
+	case USB_TEST_PACKET:
+		seq_puts(s, "test_packet\n");
+		break;
+	case USB_TEST_FORCE_ENABLE:
+		seq_puts(s, "test_force_enable\n");
+		break;
+	default:
+		seq_printf(s, "UNKNOWN %d\n", portsc);
+	}
+
+	return 0;
+}
+
+static int mv_udc_testmode_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mv_udc_testmode_show, inode->i_private);
+}
+
+static ssize_t mv_udc_testmode_write(struct file *file, const char __user *ubuf,
+				 size_t count, loff_t *ppos)
+{
+	struct seq_file *s = file->private_data;
+	struct mv_udc *udc = s->private;
+	unsigned long flags;
+	u32 testmode = 0;
+	char buf[32];
+
+	if (copy_from_user(&buf, ubuf, min_t(size_t, sizeof(buf) - 1, count)))
+		return -EFAULT;
+
+	if (!strncmp(buf, "test_j", 6))
+		testmode = USB_TEST_J;
+	else if (!strncmp(buf, "test_k", 6))
+		testmode = USB_TEST_K;
+	else if (!strncmp(buf, "test_se0_nak", 12))
+		testmode = USB_TEST_SE0_NAK;
+	else if (!strncmp(buf, "test_packet", 11))
+		testmode = USB_TEST_PACKET;
+	else if (!strncmp(buf, "test_force_enable", 17))
+		testmode = USB_TEST_FORCE_ENABLE;
+	else
+		testmode = 0;
+
+	dev_info(&udc->dev->dev, "switch to test mode %d\n", testmode);
+
+	spin_lock_irqsave(&udc->lock, flags);
+
+	if (udc->gadget.speed != USB_SPEED_HIGH)
+		ep0_stall(udc);
+
+	if (udc->usb_state != USB_STATE_CONFIGURED &&
+	    udc->usb_state != USB_STATE_ADDRESS &&
+	    udc->usb_state != USB_STATE_DEFAULT)
+		ep0_stall(udc);
+
+	mv_set_ptc(udc, testmode);
+
+	spin_unlock_irqrestore(&udc->lock, flags);
+
+	return count;
+}
+
+static const struct file_operations mv_udc_testmode_fops = {
+	.open = mv_udc_testmode_open,
+	.write = mv_udc_testmode_write,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static void mv_udc_debugfs_init(struct mv_udc *udc)
 {
 	struct dentry *root;
@@ -231,6 +331,8 @@ static void mv_udc_debugfs_init(struct mv_udc *udc)
 			    &mv_udc_dtd_queue_fops);
 	debugfs_create_file("registers", 0400, root, udc,
 			    &mv_udc_registers_fops);
+	debugfs_create_file("testmode", 0644, root, udc,
+			    &mv_udc_testmode_fops);
 }
 
 static void ep0_reset(struct mv_udc *udc)
@@ -1769,6 +1871,7 @@ static void mv_set_ptc(struct mv_udc *udc, u32 mode)
 	u32 portsc;
 
 	portsc = readl(&udc->op_regs->portsc[0]);
+	portsc &= ~(0x7 << 16);
 	portsc |= mode << 16;
 	writel(portsc, &udc->op_regs->portsc[0]);
 }

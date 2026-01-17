@@ -117,7 +117,7 @@
 	#endif
 	#define CONFIG_PHL_NAN
 	#define CONFIG_PHL_MDNS_OFFLOAD
-	#define CONFIG_PHL_APF
+	#define CONFIG_PHL_WOW_APF
 	#define CONFIG_PHL_DIAGNOSE
 	#define DBG_MONITOR_TIME
 	#define CONFIG_PHL_BEAMFORM
@@ -386,15 +386,12 @@
 #define CONFIG_PHL_MDNS_OFFLOAD
 #endif
 
-#ifdef CONFIG_APF
-#define CONFIG_PHL_APF
-#ifdef CONFIG_APF_DBG
-#define CONFIG_PHL_APF_DBG
+#ifdef CONFIG_WOW_APF
+#define CONFIG_PHL_WOW_APF
+#ifdef CONFIG_WOW_APF_DBG
+#define CONFIG_PHL_WOW_APF_DBG
 #endif
-#ifdef CONFIG_APF_DBG_DUMP
-#define CONFIG_PHL_APF_DBG_DUMP
-#endif
-#endif /* CONFIG_APF */
+#endif /* CONFIG_WOW_APF */
 
 #if defined(CONFIG_SDIO_HCI) && defined(RTW_WKARD_SD_RESET_DISABLE)
 #define RTW_WKARD_PHL_SD_RESET_DISABLE

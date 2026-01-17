@@ -650,10 +650,11 @@ ssize_t proc_set_wow_pw_info(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *pos, void *data);
 #endif
 
-#ifdef CONFIG_APF
-ssize_t proc_set_apf(struct file *file, const char __user *buffer,
-		     size_t count, loff_t *pos, void *data);
-int proc_get_apf(struct seq_file *m, void *v);
+#ifdef CONFIG_WOW_APF
+ssize_t proc_set_wow_apf(struct file *file, const char __user *buffer,
+		size_t count, loff_t *pos, void *data);
+int proc_get_wow_apf(struct seq_file *m, void *v);
+
 #endif
 
 #endif /* CONFIG_WOWLAN */

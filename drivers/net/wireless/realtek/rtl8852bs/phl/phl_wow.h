@@ -85,6 +85,11 @@ struct phl_wow_info {
 	u32 mdns_rsp_data_token[MAX_MDNS_RESP_NUM];
 	u32 mdns_passthru_list_token[MAX_MDNS_PASSTHRU_NAME_NUM];
 #endif
+#ifdef CONFIG_PHL_WOW_APF
+	u32 apf_rsp_hdr_token;
+	u32 apf_prog_token[16];
+#endif
+
 	/* func */
 	struct rtw_keep_alive_info keep_alive_info;
 	struct rtw_disc_det_info disc_det_info;
@@ -100,8 +105,8 @@ struct phl_wow_info {
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 	struct rtw_mdns_ofld_info *mdns_ofld_info;
 #endif
-#ifdef CONFIG_PHL_APF
-	struct phl_apf_info *apf_info;
+#ifdef CONFIG_PHL_WOW_APF
+	struct rtw_apf_info *apf_info;
 #endif
 
 	/* info to core */

@@ -5713,6 +5713,143 @@ static int rtw_fpga_set(struct net_device *dev,
 	return ret;
 }
 #endif
+#ifdef CONFIG_WOW_APF
+enum access {
+	SET,
+	GET
+};
+/* access 0 : set/clear apf prog, 1*/
+static int rtw_apf(struct net_device *dev,
+			   struct iw_request_info *info,
+			   union iwreq_data *wrqu, char *extra, u8 access)
+{
+	_adapter *padapter = rtw_netdev_priv(dev);
+	int ret = 0, len = 0, i;
+	u16 apf_prog_len = 0;
+	u8 *apf_prog = NULL;
+
+#if 0
+	if (extra) {
+		len = strlen(extra);
+		RTW_INFO("len: %d\n", len);
+		RTW_INFO("extra: %s\n", extra);
+		RTW_INFO_DUMP(NULL, extra, len);
+	}
+#endif
+
+	if (access == SET) {
+		if (extra) {
+			len = strlen(extra);
+			if (_rtw_memcmp(extra, "clear", 5)) {
+				if (rtw_wow_clear_apf(padapter) != _SUCCESS) {
+					RTW_ERR("%s() rtw_wow_clear_apf fail\n", __func__);
+					ret = -EFAULT;
+				}
+			} else { /* set apf prog */
+				if ((len % 2) != 0 || len > MAX_APF_PROG_SIZE * 2) {
+					RTW_ERR("%s() Invalid APF PROG, len(%d)\n", __func__, len);
+					RTW_ERR("Input APF PROG:%s\n", extra);
+					ret = -EINVAL;
+				} else {
+					apf_prog = rtw_zvmalloc(len / 2);
+					apf_prog_len = 0;
+					if (!apf_prog) {
+						RTW_ERR("%s() apf_prog is NULL\n", __func__);
+						ret = -ENOMEM;
+					} else {
+						for (i = 0; i < len; i += 2) {
+							apf_prog[apf_prog_len] = key_2char2num(extra[i], extra[i + 1]);
+							apf_prog_len++;
+						}
+#ifdef CONFIG_WOW_APF_DBG
+						RTW_INFO("%s() set apf prog(%d|%d)\n", __func__, len, apf_prog_len);
+						RTW_INFO("%s\n", extra);
+						RTW_INFO_DUMP("APF PROG HEX", apf_prog, apf_prog_len);
+#endif
+						if (rtw_wow_set_apf(padapter, apf_prog, apf_prog_len) != _SUCCESS) {
+							RTW_ERR("%s() rtw_wow_set_apf fail\n", __func__);
+							ret = -EFAULT;
+						}
+					}
+
+				}
+			}
+		}
+	} else { /* get apf prog */
+		apf_prog= rtw_zvmalloc(MAX_APF_PROG_SIZE);
+		if (!apf_prog) {
+			RTW_ERR("%s() apf_prog is NULL\n", __func__);
+			ret = -ENOMEM;
+		} else {
+			if (rtw_wow_get_apf(padapter, apf_prog, &apf_prog_len) != _SUCCESS) {
+					RTW_ERR("%s() rtw_wow_get_apf fail\n", __func__);
+					ret = -EFAULT;
+			} else {
+				if (!extra)
+					RTW_INFO("extra is NULL\n");
+
+				RTW_INFO_DUMP("APF PROG HEX", apf_prog, apf_prog_len);
+			}
+		}
+	}
+
+	if (ret != 0) {
+		RTW_ERR("%s() Incorrect ioctl cmd:\n", __func__);
+		RTW_ERR("%s\n", extra);
+		RTW_INFO("apf cmd:\n");
+		RTW_INFO("Set apf prog		: iwpriv wlan0 apf_set $APF_PROG\n");
+		RTW_INFO("Get apf prog		: iwpriv wlan0 apf_get\n");
+		RTW_INFO("Clear apf prog	: iwpriv wlan0 apf_set clear\n");
+	}
+
+	if (apf_prog)
+		rtw_vmfree(apf_prog, apf_prog_len);
+	return ret;
+}
+/* access 0 : set/clear apf prog, 1*/
+static int rtw_apf_default(struct net_device *dev,
+			   struct iw_request_info *info,
+			   union iwreq_data *wrqu, char *extra, u8 access)
+{
+	_adapter *padapter = rtw_netdev_priv(dev);
+	static u16 apf_dft_prog_len = 0;
+	static u8 apf_dft_prog[2048];
+	int i, len, ret = 0;
+
+	if (access == SET) {
+		RTW_INFO("Set apf dft prog, exisit len(%u)\n", apf_dft_prog_len);
+		if (extra) {
+			if (_rtw_memcmp(extra, "clear", 5)) {
+				RTW_INFO("Clear apf dft prog\n");
+				apf_dft_prog_len = 0;
+				_rtw_memset(apf_dft_prog, 0, 2048);
+			} else if (_rtw_memcmp(extra, "set", 3)) {
+				RTW_INFO("Set apf dft prog\n");
+				rtw_wow_set_apf(padapter, apf_dft_prog, apf_dft_prog_len);
+			} else {
+				RTW_INFO("Fill apf dft prog\n");
+				len = strlen(extra);
+				if ((len % 2) != 0 || len > MAX_APF_PROG_SIZE * 2) {
+					RTW_ERR("%s() Invalid APF PROG, len(%d)\n", __func__, len);
+					RTW_ERR("Input APF PROG:%s\n", extra);
+					ret = -EINVAL;
+				} else {
+					for (i = 0; i < len; i += 2) {
+							apf_dft_prog[apf_dft_prog_len] = key_2char2num(extra[i], extra[i + 1]);
+							apf_dft_prog_len++;
+					}
+				}
+			}
+		}
+	} else {
+		RTW_INFO("Get apf dft prog len(%u)\n", apf_dft_prog_len);
+		RTW_INFO_DUMP("APF DFT PROG HEX:\n", apf_dft_prog, apf_dft_prog_len);
+	}
+
+	return 0;
+}
+
+#endif
 static int rtw_priv_set(struct net_device *dev,
 			struct iw_request_info *info,
 			union iwreq_data *wdata, char *extra)
@@ -5782,6 +5919,16 @@ static int rtw_priv_set(struct net_device *dev,
 		rtw_fpga_set(dev , info , wdata , extra);
 		break;
 #endif
+#ifdef CONFIG_WOW_APF
+	case APF_SET:
+		RTW_INFO("set apf prog\n");
+		rtw_apf(dev, info, wdata, extra, SET);
+		break;
+	case APF_DEFAULT_SET:
+		RTW_INFO("<set dft apf prog>\n");
+		rtw_apf_default(dev, info, wdata, extra, SET);
+		break;
+#endif
 	default:
 		return -EIO;
 	}
@@ -5839,6 +5986,17 @@ static int rtw_priv_get(struct net_device *dev,
 				status = rtw_vendor_ie_get(dev , info , wdata , extra);
 				break;
 #endif
+#ifdef CONFIG_WOW_APF
+			case APF_GET:
+				RTW_INFO("get apf prog\n");
+				rtw_apf(dev, info, wdata, extra, GET);
+				break;
+			case APF_DEFAULT_GET:
+				RTW_INFO("get apf prog\n");
+				rtw_apf_default(dev, info, wdata, extra, GET);
+				break;
+#endif
+
 			default:
 				return -EIO;
 		}
@@ -7517,6 +7675,12 @@ static const struct iw_priv_args rtw_private_args[] = {
 #endif
 #ifdef CONFIG_FPGA_INCLUDED
 	{ FPGA_SET, IW_PRIV_TYPE_CHAR | 1024 , 0 , "fpga_set" },
+#endif
+#ifdef CONFIG_WOW_APF
+	{ APF_SET, IW_PRIV_TYPE_CHAR | 1024, 0, "apf_set"},
+	{ APF_GET, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "apf_get" },
+	{ APF_DEFAULT_SET, IW_PRIV_TYPE_CHAR | 1024, 0, "apf_dft_set"},
+	{ APF_DEFAULT_GET, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "apf_dft_get" },
 #endif
 };
 

@@ -227,9 +227,23 @@ static int spacemit_panel_disable(struct drm_panel *p)
 		panel->esd_work_pending = false;
 	}
 
-	spacemit_panel_send_cmds(panel->slave,
+
+	if(INVALID_GPIO != panel->gpio_switch) {
+		gpio_direction_output(panel->gpio_switch, 0);
+		msleep(2);
+		spacemit_panel_send_cmds(panel->slave,
 			     panel->info.cmds[CMD_CODE_SLEEP_IN],
 			     panel->info.cmds_len[CMD_CODE_SLEEP_IN]);
+		gpio_direction_output(panel->gpio_switch, 1);
+		msleep(2);
+		spacemit_panel_send_cmds(panel->slave,
+			     panel->info.cmds[CMD_CODE_SLEEP_IN],
+			     panel->info.cmds_len[CMD_CODE_SLEEP_IN]);
+	} else {
+		spacemit_panel_send_cmds(panel->slave,
+					panel->info.cmds[CMD_CODE_SLEEP_IN],
+					panel->info.cmds_len[CMD_CODE_SLEEP_IN]);
+	}
 
 	atomic_set(&panel->enable_refcnt, 0);
 	return 0;
@@ -244,9 +258,22 @@ static int spacemit_panel_enable(struct drm_panel *p)
 
 	DRM_INFO("%s()\n", __func__);
 
-	spacemit_panel_send_cmds(panel->slave,
-			     panel->info.cmds[CMD_CODE_INIT],
-			     panel->info.cmds_len[CMD_CODE_INIT]);
+	if(INVALID_GPIO != panel->gpio_switch) {
+		gpio_direction_output(panel->gpio_switch, 0);
+		msleep(2);
+		spacemit_panel_send_cmds(panel->slave,
+					panel->info.cmds[CMD_CODE_INIT],
+					panel->info.cmds_len[CMD_CODE_INIT]);
+		gpio_direction_output(panel->gpio_switch, 1);
+		msleep(2);
+		spacemit_panel_send_cmds(panel->slave,
+					panel->info.cmds[CMD_CODE_INIT],
+					panel->info.cmds_len[CMD_CODE_INIT]);
+	} else {
+		spacemit_panel_send_cmds(panel->slave,
+					panel->info.cmds[CMD_CODE_INIT],
+					panel->info.cmds_len[CMD_CODE_INIT]);
+	}
 
 	if (panel->info.esd_check_en) {
 		schedule_delayed_work(&panel->esd_work,
@@ -531,6 +558,51 @@ static int spacemit_panel_device_create(struct device *parent,
 	return device_register(&panel->dev);
 }
 
+static ssize_t gpio_switch_store(struct device *dev,
+                                struct device_attribute *attr,
+                                const char *buf, size_t count)
+{
+    struct spacemit_panel *panel = dev_get_drvdata(dev);
+    unsigned long val;
+    int ret;
+
+    ret = kstrtoul(buf, 0, &val);
+    if (ret)
+        return ret;
+
+    if (val != 0 && val != 1) {
+        DRM_ERROR("Invalid value: must be 0 or 1 \n");
+        return -EINVAL;
+    }
+    if (!gpio_is_valid(panel->gpio_switch)) {
+        DRM_ERROR("gpio_switch is not valid \n");
+        return -ENODEV;
+    }
+    gpio_set_value(panel->gpio_switch, val);
+    DRM_INFO("Set gpio_switch to %d \n", val);
+
+    return count;
+}
+
+static ssize_t gpio_switch_show(struct device *dev,
+                                struct device_attribute *attr,
+                                char *buf)
+{
+    struct spacemit_panel *panel = dev_get_drvdata(dev);
+    int value = -EINVAL;
+
+    if (!gpio_is_valid(panel->gpio_switch)) {
+        DRM_ERROR("gpio_switch is not valid \n");
+        return -ENODEV;
+    }
+    value = gpio_get_value(panel->gpio_switch);
+	DRM_INFO("get gpio_switch is %d \n", value);
+
+    return sprintf(buf, "%d \n", value);
+}
+
+static DEVICE_ATTR_RW(gpio_switch);
+
 static int spacemit_panel_probe(struct mipi_dsi_device *slave)
 {
 	int ret;
@@ -612,6 +684,18 @@ static int spacemit_panel_probe(struct mipi_dsi_device *slave)
 		}
 	}
 
+	ret = of_property_read_u32(dev->of_node, "gpios-switch", &panel->gpio_switch);
+	if (ret || !gpio_is_valid(panel->gpio_switch)) {
+		dev_dbg(dev, "Missing dt property: gpios-switch\n");
+		panel->gpio_switch = INVALID_GPIO;
+	} else {
+		ret = gpio_request(panel->gpio_switch, NULL);
+		if (ret) {
+			pr_err("gpio_switch request fail\n");
+			return ret;
+		}
+	}
+
 	ret = of_property_read_u32_array(dev->of_node, "gpios-dc", panel->gpio_dc, 2);
 	if (ret || !gpio_is_valid(panel->gpio_dc[0]) || !gpio_is_valid(panel->gpio_dc[1])) {
 		dev_err(dev, "Missing dt property: gpios-dc\n");
@@ -655,6 +739,17 @@ static int spacemit_panel_probe(struct mipi_dsi_device *slave)
 	if (ret) {
 		DRM_ERROR("panel device create failed\n");
 		return ret;
+	}
+
+	if(INVALID_GPIO != panel->gpio_switch) {
+		gpio_direction_output(panel->gpio_switch, 0);
+		ret = device_create_file(&panel->dev, &dev_attr_gpio_switch);
+		DRM_INFO("create sysfs file gpio_switch\n");
+		if (ret) {
+			DRM_ERROR("failed to create gpio_switch sysfs file\n");
+			gpio_free(panel->gpio_switch);
+			panel->gpio_switch = INVALID_GPIO;
+		}
 	}
 
 	panel->base.dev = &panel->dev;

@@ -225,14 +225,14 @@ enum wifi_rssi_monitor_attr {
         RSSI_MONITOR_ATTRIBUTE_START,
 };
 
-#ifdef CONFIG_APF
+#ifdef CONFIG_WOW_APF
 enum wifi_apf_attr {
     APF_ATTRIBUTE_VERSION,
     APF_ATTRIBUTE_MAX_LEN,
     APF_ATTRIBUTE_PROGRAM,
     APF_ATTRIBUTE_PROGRAM_LEN
 };
-#endif /* CONFIG_APF */
+#endif /* CONFIG_WOW_APF */
 
 enum rtt_attributes {
 	RTT_ATTRIBUTE_TARGET_CNT,

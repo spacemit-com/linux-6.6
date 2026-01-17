@@ -62,8 +62,8 @@ enum spacemit_mipi_input_data_mode{
 };
 
 enum spacemit_dsi_work_mode {
-	SPACEMIT_DSI_MODE_VIDEO,
-	SPACEMIT_DSI_MODE_CMD,
+	SPACEMIT_DSI_MODE_VIDEO = 0,
+	SPACEMIT_DSI_MODE_CMD = 1,
 	SPACEMIT_DSI_MODE_MAX
 };
 
