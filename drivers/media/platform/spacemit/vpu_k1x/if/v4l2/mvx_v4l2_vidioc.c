@@ -1187,7 +1187,7 @@ int mvx_v4l2_vidioc_streamon(struct file *file,
 	ret = vb2_streamon(&vsession->port[dir].vb2_queue, type);
 	if (ret != 0)
 		MVX_SESSION_WARN(&vsession->session,
-				 "v4l2: Failed to stream on. dir=%u.", dir);
+				 "v4l2: Failed to stream on. dir=%u ret=%d.", dir, ret);
 
 	mutex_unlock(&vsession->mutex);
 
