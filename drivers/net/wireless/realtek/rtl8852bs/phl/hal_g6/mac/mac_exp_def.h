@@ -731,11 +731,48 @@ struct rtw_hal_mac_apf {
 	u8 *ptr[16];
 };
 
+struct rtw_hal_mac_apf_ctrl {
+	u32 macid:16;
+	u32 apf_cmd:8;
+	u32 apf_prog_frag_num:8;
+	u32 mac_pktid:8;
+	u32 apf_pktid1:8;
+	u32 apf_pktid2:8;
+	u32 apf_pktid3:8;
+	u32 apf_pktid4:8;
+	u32 apf_pktid5:8;
+	u32 apf_pktid6:8;
+	u32 apf_pktid7:8;
+
+	u32 apf_ram_size:16;
+	u32 apf_prog_size:16;
+	u32 version[2];
+	u32 hw_aes_iv:8;
+	u32 rx_forward:8;
+	u32 fw_dis_interval:8;
+	u32 dbg:8;
+	u32 multicast_mask:16;
+	u32 pairwise_sec_algo:8;
+	u32 group_sec_algo:8;
+	u32 rsvd2;
+	u32 *ptr_apf_ram_buffer;
+	u32 *ptr_status;
+};
+
 struct rtw_hal_mac_apf_report {
 	u8 program_num;
 	u8 rsvd1[3];
 	struct rtw_hal_mac_apf_prog_info prog_info;
 	u32 program_ptr;
+};
+
+struct rtw_hal_mac_apf_ofld_report {
+	u32 num;
+	u32 len;
+	u32 offset_len;
+	u32 status;
+	u32 apf_ram_buf;
+	u32 rpt_ptr;
 };
 
 struct rtw_hal_mac_proxy_mdns {

@@ -6,7 +6,6 @@
 #include "k1-x_pinctrl.dtsi"
 
 &soc {
-	/* imx315 */
 	backsensor: cam_sensor@0 {
 		cell-index = <0>;
 		twsi-index = <0>;
@@ -33,7 +32,6 @@
 		status = "okay";
 	};
 
-	/* gc2375h */
 	backsensor_aux: cam_sensor@1 {
 		cell-index = <1>;
 		twsi-index = <1>;
@@ -52,7 +50,6 @@
 		status = "okay";
 	};
 
-	/* S5K5E3 */
 	frontsensor: cam_sensor@2 {
 		cell-index = <2>;
 		twsi-index = <1>;

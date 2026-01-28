@@ -1527,6 +1527,26 @@ static void _phl_get_nlo_rpt(struct phl_wow_info *wow_info)
 		}
 	}
 }
+#ifdef CONFIG_PHL_WOW_APF
+static void _phl_get_apf_rpt(struct phl_wow_info *wow_info)
+{
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_FAILURE;
+	struct phl_info_t *phl_info = wow_info->phl_info;
+	struct rtw_phl_stainfo_t *sta = wow_info->sta;
+	struct rtw_apf_info *info = wow_info->apf_info;
+	u8 i = 0;
+
+	PHL_INFO("%s() apf_prog_num(%u) total_size(%u)\n", __func__, info->apf_prog_num, info->apf_prog_total_size);
+	for (i = 0; i < info->apf_prog_num; i++) {
+		PHL_INFO("====apf_prog(%u) size(%u)====\n", i, info->apf_prog_len);
+		info->idx_apf_prog_ofld = i;
+		hstatus = rtw_hal_wow_access_apf(phl_info->hal, sta->macid, info, 0);
+		if (hstatus != RTW_HAL_STATUS_SUCCESS)
+			PHL_ERR("rtw_hal_wow_access_apf fail\n");
+	}
+}
+#endif /* CONFIG_PHL_WOW_APF */
 
 /*
  * return role map of excluded role from suspension
@@ -1593,6 +1613,10 @@ enum rtw_phl_status phl_wow_deinit_precfg(struct phl_wow_info *wow_info)
 		SET_WOW_DEINIT_ERR(wow_info, WOW_HANDLE_AOAC_RPT_PHASE1);
 
 	rtw_hal_wow_req_diag_rpt(phl_info->hal);
+
+#ifdef CONFIG_PHL_WOW_APF
+	_phl_get_apf_rpt(wow_info);
+#endif
 
 	return phl_status;
 }
@@ -1697,6 +1721,14 @@ enum rtw_phl_status _phl_wow_cfg_pkt_ofld(struct phl_wow_info *wow_info, u8 pkt_
 		token = &wow_info->mdns_passthru_list_token[ofld_idx];
 		break;
 #endif
+#ifdef CONFIG_PHL_WOW_APF
+	case PKT_TYPE_APF_RSP_HDR:
+		token = &wow_info->apf_rsp_hdr_token;
+		break;
+	case PKT_TYPE_APF_PROG:
+		token = &wow_info->apf_prog_token[ofld_idx];
+		break;
+#endif
 	default:
 		PHL_TRACE(COMP_PHL_WOW, _PHL_ERR_, "[wow] %s : unknown pkt_type %d.\n"
 			, __func__, pkt_type);
@@ -1754,6 +1786,51 @@ static enum rtw_phl_status _phl_wow_cfg_nlo(struct phl_wow_info *wow_info)
 
 	return pstatus;
 }
+
+#ifdef CONFIG_PHL_WOW_APF
+void rtw_phl_cfg_apf_info(void *phl, struct rtw_apf_info *info)
+{
+
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	void *drv_priv = phl_to_drvpriv(phl_info);
+
+	FUNCIN();
+
+	wow_info->apf_info = info;
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] apf_en %d\n", wow_info->apf_info->apf_en);
+}
+
+static enum rtw_phl_status _phl_cfg_pkt_ofld_apf_hdr(struct phl_wow_info *wow_info, struct rtw_phl_stainfo_t *phl_sta)
+{
+	void *drv_priv = phl_to_drvpriv(wow_info->phl_info);
+	struct rtw_apf_info *info = wow_info->apf_info;
+	u8 pairwise_algo = get_wow_pairwise_algo_type(wow_info);
+	struct dev_cap_t *dev_cap = &(wow_info->phl_info->phl_com->dev_cap);
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+
+	_os_mem_cpy(drv_priv, &(info->a1[0]), &(phl_sta->mac_addr[0]), MAC_ADDRESS_LENGTH);
+	_os_mem_cpy(drv_priv, &(info->a2[0]), &(phl_sta->wrole->mac_addr[0]), MAC_ADDRESS_LENGTH);
+	_os_mem_cpy(drv_priv, &(info->a3[0]), &(phl_sta->mac_addr[0]), MAC_ADDRESS_LENGTH);
+
+	info->sec_hdr_len = 0;
+	info->protect_bit = (pairwise_algo == RTW_ENC_NONE) ? false : true;
+
+	if (info->protect_bit)
+		info->sec_hdr_len = (_phl_chk_hw_form_sechdr(dev_cap, pairwise_algo)) ? 0 : _phl_query_iv_len(pairwise_algo);
+
+	pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+				        PKT_TYPE_APF_RSP_HDR,
+				        &wow_info->apf_info->mac_pktid,
+				        (void *)wow_info->apf_info, 0);
+
+	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+		PHL_ERR("%s pkt ofld apf rsp hdr fail\n", __func__);
+	}
+	return pstatus;
+}
+#endif /* CONFIG_PHL_WOW_APF */
+
 
 enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 {
@@ -1971,6 +2048,33 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			}
 		}
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_WOW_APF
+		if (wow_info->apf_info->apf_en) {
+			/* pkt olfd apf response hdr */
+			pstatus = _phl_cfg_pkt_ofld_apf_hdr(wow_info, sta);
+			if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+				PHL_ERR("%s() ofld apf rsp hdr fail\n", __func__);
+				break;
+			}
+
+			/* pkt olfd apf prog */
+			for (ofld_idx = 0; ofld_idx < wow_info->apf_info->apf_prog_num; ofld_idx++) {
+				PHL_INFO("%s() pkt ofld apf prog(%u)\n", __func__, ofld_idx);
+				/* indicate which apf prog be ofld */
+				wow_info->apf_info->idx_apf_prog_ofld = ofld_idx;
+				pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+								PKT_TYPE_APF_PROG,
+								&wow_info->apf_info->program_pktid,
+								(void *)wow_info->apf_info, ofld_idx);
+
+				if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+					PHL_ERR("%s() ofld apf prog fail\n", __func__);
+					break;
+				}
+			}
+		}
+#endif /* CONFIG_PHL_WOW_APF */
+
 
 		cfg.keep_alive_cfg = &wow_info->keep_alive_info;
 		cfg.disc_det_cfg = &wow_info->disc_det_info;
@@ -1985,6 +2089,9 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 		cfg.periodic_wake_cfg = &wow_info->periodic_wake_info;
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 		cfg.mdns_ofld_info = wow_info->mdns_ofld_info;
+#endif
+#ifdef CONFIG_PHL_WOW_APF
+		cfg.apf_info = wow_info->apf_info;
 #endif
 
 		hstatus = rtw_hal_wow_func_en(phl_info->phl_com, phl_info->hal, sta->macid, &cfg);

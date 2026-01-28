@@ -106,7 +106,8 @@ rtw_phl_snd_add_grp(void *phl,
 		if (RTW_FW_AP == phl_info->phl_com->fw_info.fw_type) {
 			snd_grp->snd_type = (he ? PHL_SND_TYPE_HE_SW : PHL_SND_TYPE_VHT_SW);
 		} else if ((RTW_FW_NIC == phl_info->phl_com->fw_info.fw_type) ||
-		           (RTW_FW_WOWLAN == phl_info->phl_com->fw_info.fw_type)) {
+		           (RTW_FW_WOWLAN == phl_info->phl_com->fw_info.fw_type) ||
+				   (RTW_FW_WOWLAN_CE == phl_info->phl_com->fw_info.fw_type)) {
 			if (num_sta > 1)
 				break;
 			snd_grp->snd_type = (he ? PHL_SND_TYPE_HE_HW : PHL_SND_TYPE_VHT_HW);

@@ -148,7 +148,7 @@ unsigned long ccu_ddr_calc_best_rate(struct clk_hw *hw, unsigned long rate,
 		parent = clk_hw_get_parent_by_index(hw, i);
 		if (!parent)
 			continue;
-		parent_rate = clk_get_rate(clk_hw_get_clk(parent, common->name));
+		parent_rate = clk_hw_get_rate(parent);
 		if (abs(parent_rate - rate) < abs(best_rate - rate)) {
 			best_rate = parent_rate;
 			*mux_val = i;

@@ -164,6 +164,12 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
                     u8 hw_band, u8 hw_port, struct rtw_nlo_info *cfg);
 
 enum rtw_hal_status rtw_hal_wow_dbg_dump(void *hal);
+
+#ifdef CONFIG_PHL_WOW_APF
+enum rtw_hal_status
+rtw_hal_wow_access_apf(void *hal, u16 mac_id, struct rtw_apf_info *cfg, u8 set);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 enum rtw_hal_status rtw_hal_set_sw_gpio_mode(struct rtw_phl_com_t *phl_com, void *hal, enum rtw_gpio_mode mode, u8 gpio);

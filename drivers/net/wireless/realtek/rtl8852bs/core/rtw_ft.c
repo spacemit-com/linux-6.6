@@ -335,9 +335,9 @@ void rtw_ft_update_bcn(_adapter *padapter, union recv_frame *precv_frame)
 						&padapter_link->mlmepriv.cur_beacon_keys,
 						0, sizeof(recv_beacon));
 				}
-				#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
-				pmlmepriv->new_beacon_cnts = 0;
-				#endif
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+				padapter_link->mlmepriv.new_beacon_cnts = 0;
+#endif
 			}
 			rtw_mfree((u8*)pbss, sizeof(WLAN_BSSID_EX));
 		}

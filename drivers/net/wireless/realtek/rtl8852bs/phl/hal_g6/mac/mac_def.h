@@ -93,6 +93,7 @@
 #define PKT_OFLD_MAX_COUNT 256
 #define PKT_OFLD_NOT_EXISTS_ID 0xFF
 #define PKT_OFLD_MAX_VALID_ID_NUM (PKT_OFLD_MAX_COUNT - 1)
+#define PKT_OFLD_POLLING_AS_TIMEOUT 100
 
 #define AOAC_REPORT_VERSION 1
 
@@ -5310,6 +5311,25 @@ enum mac_ax_threshold_sel {
 	MAC_AX_CTS2SELF_BOTH_THRESHOLD,
 };
 
+/*--------------------Define sdio related enum -------------------------*/
+/**
+ * @enum mac_ax_sdio_func_ctrl
+ *
+ * @brief mac_ax_sdio_func_ctrl
+ *
+ * @var mac_ax_sdio_func_ctrl::MAC_AX_SDIO_IGNORE
+ * Please Place Description here.
+ * @var mac_ax_sdio_func_ctrl::MAC_AX_SDIO_DISABLE
+ * Please Place Description here.
+ * @var mac_ax_sdio_func_ctrl::MAC_AX_SDIO_ENABLE
+ * Please Place Description here.
+ */
+enum mac_ax_sdio_func_ctrl {
+	MAC_AX_SDIO_IGNORE = 0,
+	MAC_AX_SDIO_DISABLE = 1,
+	MAC_AX_SDIO_ENABLE = 2,
+};
+
 /*--------------------Define Struct-------------------------------------*/
 
 /**
@@ -6053,6 +6073,17 @@ struct mac_ax_rxdma_ch_map {
 };
 
 /**
+ * @struct mac_ax_sdio_intf_info
+ * @brief mac_ax_sdio_intf_info
+ *
+ * @var mac_ax_sdio_intf_info::sd_reset
+ * Please Place Description here.
+ */
+struct mac_ax_sdio_intf_info {
+	enum mac_ax_sdio_func_ctrl sd_reset;
+};
+
+/**
  * @struct mac_ax_intf_info
  * @brief mac_ax_intf_info
  *
@@ -6106,6 +6137,7 @@ struct mac_ax_intf_info {
 	enum mac_ax_pcie_func_ctrl autok_en;
 	enum mac_ax_pcie_func_ctrl io_rcy_en;
 	enum mac_ax_io_rcy_tmr io_rcy_tmr;
+	struct mac_ax_sdio_intf_info sdio_intf_info;
 	struct mac_ax_txdma_ch_map *txch_map;
 	u8 *txbd_buf;
 	u8 *rxbd_buf;
@@ -8370,10 +8402,13 @@ struct mac_ax_conf_ofld_info {
  * Please Place Description here.
  */
 struct mac_ax_pkt_ofld_info {
-	u8 last_op;
+	u32 polling_times;
 	u16 free_id_count;
 	u16 used_id_count;
 	u8 id_bitmap[PKT_OFLD_MAX_COUNT >> 3];
+	u8 id_to_del_bitmap[PKT_OFLD_MAX_COUNT >> 3];
+	u8 last_op;
+	u8 last_op_id;
 };
 
 /**
@@ -16498,7 +16533,7 @@ struct mac_ax_adapter {
 #endif
 	struct mac_sta_diag_info sta_diag_info;
 
-	struct rtw_hal_mac_apf apf_info;
+	struct rtw_hal_mac_apf_ctrl apf_info;
 	/* Keep lock_info at last to skip value assignment at adapter announcement */
 	struct mac_lock_info lock_info;
 };
@@ -18175,6 +18210,8 @@ struct mac_ax_ops {
 	u32 (*proxy_llmnr)(struct mac_ax_adapter *adapter, struct rtw_hal_mac_proxy_llmnr *llmnr);
 	u32 (*mdns_ofld)(struct mac_ax_adapter *adapter, struct rtw_hal_mac_mdns_ofld *pmdns_ofld);
 	u32 (*apf_ofld)(struct mac_ax_adapter *adapter, struct rtw_hal_mac_apf *papf_ofld);
+	u32 (*apf_ofld_ctrl)(struct mac_ax_adapter *adapter,
+			     struct rtw_hal_mac_apf_ctrl *papf_ofld_ctrl, enum rtw_fw_type fw_type);
 	u32 (*apf_get_report)(struct mac_ax_adapter *adapter,
 			      struct rtw_hal_mac_apf_report *papf_ofld_rpt);
 	u32 (*check_proxy_done)(struct mac_ax_adapter *adapter, u8 *fw_ret);

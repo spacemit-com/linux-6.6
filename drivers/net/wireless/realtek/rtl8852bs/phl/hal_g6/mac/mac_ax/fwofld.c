@@ -45,7 +45,7 @@ static inline void mac_pkt_ofld_set_bitmap(u8 *bitmap, u16 index)
 	bitmap[index >> 3] |= (1 << (index & 7));
 }
 
-static inline void mac_pkt_ofld_unset_bitmap(struct mac_ax_adapter *adapter, u8 *bitmap, u16 index)
+void mac_pkt_ofld_unset_bitmap(struct mac_ax_adapter *adapter, u8 *bitmap, u16 index)
 {
 	if (index == PKT_OFLD_NOT_EXISTS_ID) {
 		PLTFM_MSG_ERR("pktofld id %d is for NOT_EXISTS and shouldn't be unset\n",
@@ -55,7 +55,7 @@ static inline void mac_pkt_ofld_unset_bitmap(struct mac_ax_adapter *adapter, u8 
 	bitmap[index >> 3] &= ~(1 << (index & 7));
 }
 
-static u8 mac_pkt_ofld_get_bitmap(u8 *bitmap, u16 index)
+u8 mac_pkt_ofld_get_bitmap(u8 *bitmap, u16 index)
 {
 	if (index == PKT_OFLD_NOT_EXISTS_ID)
 		return 1;
@@ -69,8 +69,10 @@ u32 mac_reset_fwofld_state(struct mac_ax_adapter *adapter, u8 op)
 		PLTFM_MSG_TRACE("%s: set pktofld st to idle and clear occupied ids\n", __func__);
 		adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_IDLE;
 		PLTFM_MEMSET(adapter->pkt_ofld_info.id_bitmap, 0, (PKT_OFLD_MAX_COUNT >> 3));
+		PLTFM_MEMSET(adapter->pkt_ofld_info.id_to_del_bitmap, 0, (PKT_OFLD_MAX_COUNT >> 3));
 		mac_pkt_ofld_set_bitmap(adapter->pkt_ofld_info.id_bitmap, PKT_OFLD_NOT_EXISTS_ID);
 		adapter->pkt_ofld_info.last_op = PKT_OFLD_OP_MAX;
+		adapter->pkt_ofld_info.last_op_id = PKT_OFLD_NOT_EXISTS_ID;
 		adapter->pkt_ofld_info.free_id_count = PKT_OFLD_MAX_VALID_ID_NUM;
 		adapter->pkt_ofld_info.used_id_count = 1;
 		break;
@@ -92,6 +94,7 @@ u32 mac_check_fwofld_done(struct mac_ax_adapter *adapter, u8 op)
 
 	switch (op) {
 	case FW_OFLD_OP_PACKET_OFLD:
+		ofld_info->polling_times++;
 		if (ofld_info->last_op == PKT_OFLD_OP_READ) {
 			if (adapter->sm.pkt_ofld == MAC_AX_OFLD_H2C_DONE)
 				return MACSUCCESS;
@@ -110,6 +113,99 @@ u32 mac_check_fwofld_done(struct mac_ax_adapter *adapter, u8 op)
 	}
 
 	return MACPROCBUSY;
+}
+
+
+u32 _recover_pkt_ofld(struct mac_ax_adapter *adapter)
+{
+	u8 *buf;
+	u32 ret = MACPROCBUSY;
+	u32 polling_cnt;
+	u8 retry_cnt;
+	u16 id_to_del;
+	struct fwcmd_packet_ofld *write_ptr;
+	struct mac_ax_pkt_ofld_info *ofld_info = &adapter->pkt_ofld_info;
+	struct h2c_info h2c_info = {0};
+
+	PLTFM_MSG_WARN("[pktofld] Recovering. last_op (%d) last_id (%d) polled_cnt (%d)\n",
+		       ofld_info->last_op, ofld_info->last_op_id, ofld_info->polling_times);
+
+	if (ofld_info->last_op == PKT_OFLD_OP_READ) {
+		PLTFM_MSG_WARN("[pktofld] Recoverd to ERROR state\n");
+		adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_ERROR;
+		return MACSUCCESS;
+	} else if (ofld_info->last_op == PKT_OFLD_OP_ADD) {
+		mac_pkt_ofld_set_bitmap(ofld_info->id_to_del_bitmap, ofld_info->last_op_id);
+	}
+
+	for (id_to_del = 0; id_to_del < PKT_OFLD_NOT_EXISTS_ID; id_to_del++) {
+		if (!mac_pkt_ofld_get_bitmap(ofld_info->id_to_del_bitmap, id_to_del))
+			continue;
+		for (retry_cnt = 0; retry_cnt < 5; retry_cnt++) {
+			PLTFM_MSG_WARN("[pktofld] Recover (del id %d) #%d\n", id_to_del, retry_cnt);
+			buf = (u8 *)PLTFM_MALLOC(sizeof(struct fwcmd_packet_ofld));
+			if (!buf) {
+				PLTFM_MSG_WARN("[pktofld] Recover fail (NOBUF)\n");
+				ret = MACNOBUF;
+				continue;
+			}
+			write_ptr = (struct fwcmd_packet_ofld *)buf;
+			write_ptr->dword0 =
+			cpu_to_le32(SET_WORD((u8)id_to_del, FWCMD_H2C_PACKET_OFLD_PKT_IDX) |
+				    SET_WORD(PKT_OFLD_OP_DEL, FWCMD_H2C_PACKET_OFLD_PKT_OP)
+			);
+
+			h2c_info.agg_en = 0;
+			h2c_info.content_len = sizeof(struct fwcmd_packet_ofld);
+			h2c_info.h2c_cat = FWCMD_H2C_CAT_MAC;
+			h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
+			h2c_info.h2c_func = FWCMD_H2C_FUNC_PACKET_OFLD;
+			h2c_info.rec_ack = 1;
+			h2c_info.done_ack = 1;
+
+			ret = mac_h2c_common(adapter, &h2c_info, (u32 *)write_ptr);
+			PLTFM_FREE(write_ptr, sizeof(struct fwcmd_packet_ofld));
+
+			if (ret) {
+				PLTFM_MSG_WARN("[pktofld] Recover fail (mac_h2c_common = %d)\n",
+					       ret);
+				continue;
+			}
+
+			polling_cnt = PKT_OFLD_POLLING_AS_TIMEOUT;
+
+			while (polling_cnt-- &&
+			       mac_check_fwofld_done(adapter, FW_OFLD_OP_PACKET_OFLD)) {
+				PLTFM_SLEEP_MS(1);
+			}
+			if (mac_check_fwofld_done(adapter, FW_OFLD_OP_PACKET_OFLD)) {
+				PLTFM_MSG_WARN("[pktofld] Recover fail (polling)\n");
+				ret = MACPROCBUSY;
+			} else {
+				PLTFM_MSG_WARN("[pktofld] Recoverd\n");
+				ret = MACSUCCESS;
+				break;
+			}
+		}
+		if (ret != MACSUCCESS)
+			break;
+	}
+	if (ret != MACSUCCESS)
+		ofld_info->polling_times = PKT_OFLD_POLLING_AS_TIMEOUT;
+	return ret;
+}
+
+u32 mac_pkt_ofld_watchdog(struct mac_ax_adapter *adapter)
+{
+	struct mac_ax_pkt_ofld_info *ofld_info = &adapter->pkt_ofld_info;
+
+	if (adapter->sm.pkt_ofld != MAC_AX_OFLD_H2C_IDLE) {
+		if (ofld_info->polling_times >= PKT_OFLD_POLLING_AS_TIMEOUT) {
+			PLTFM_MSG_TRACE("[pktofld] Watchdog recover\n");
+			return _recover_pkt_ofld(adapter);
+		}
+	}
+	return MACSUCCESS;
 }
 
 u32 mac_read_pkt_ofld(struct mac_ax_adapter *adapter, u8 id)
@@ -182,13 +278,35 @@ u32 mac_del_pkt_ofld(struct mac_ax_adapter *adapter, u8 id)
 	if (ofld_info->used_id_count == 0)
 		return MACNOITEM;
 
-	if (adapter->sm.pkt_ofld != MAC_AX_OFLD_H2C_IDLE)
-		return MACPROCERR;
+	if (adapter->sm.pkt_ofld != MAC_AX_OFLD_H2C_IDLE) {
+		if (ofld_info->polling_times >= PKT_OFLD_POLLING_AS_TIMEOUT) {
+			if (_recover_pkt_ofld(adapter)) {
+				mac_pkt_ofld_set_bitmap(ofld_info->id_to_del_bitmap, id);
+				return MACPROCERR;
+			}
+		} else {
+			mac_pkt_ofld_set_bitmap(ofld_info->id_to_del_bitmap, id);
+			return MACPROCERR;
+		}
+	}
+
+	if (mac_pkt_ofld_get_bitmap(ofld_info->id_bitmap, id) == 0)
+		return MACSUCCESS;
+
+	if (ofld_info->used_id_count == 0)
+		return MACSUCCESS;
+
+	ofld_info->polling_times = 0;
 
 	adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_SENDING;
 
+	PLTFM_MSG_TRACE("[pktofld] del. id: %d, free cnt: %d, use cnt: %d\n",
+			id, ofld_info->free_id_count,
+			ofld_info->used_id_count);
+
 	buf = (u8 *)PLTFM_MALLOC(sizeof(struct fwcmd_packet_ofld));
 	if (!buf) {
+		mac_pkt_ofld_set_bitmap(ofld_info->id_to_del_bitmap, id);
 		adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_IDLE;
 		return MACBUFALLOC;
 	}
@@ -206,11 +324,14 @@ u32 mac_del_pkt_ofld(struct mac_ax_adapter *adapter, u8 id)
 	h2c_info.rec_ack = 1;
 	h2c_info.done_ack = 1;
 
+	mac_pkt_ofld_set_bitmap(ofld_info->id_to_del_bitmap, id);
+
 	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)write_ptr);
 	PLTFM_FREE(write_ptr, sizeof(struct fwcmd_packet_ofld));
 	if (ret)
 		adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_IDLE;
 	ofld_info->last_op = PKT_OFLD_OP_DEL;
+	ofld_info->last_op_id = id;
 
 
 	return ret;
@@ -232,8 +353,14 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 	if (ofld_info->free_id_count == 0)
 		return MACNOBUF;
 
-	if (adapter->sm.pkt_ofld != MAC_AX_OFLD_H2C_IDLE)
-		return MACPROCERR;
+	if (adapter->sm.pkt_ofld != MAC_AX_OFLD_H2C_IDLE) {
+		if (ofld_info->polling_times >= PKT_OFLD_POLLING_AS_TIMEOUT) {
+			if (_recover_pkt_ofld(adapter))
+				return MACPROCERR;
+		} else {
+			return MACPROCERR;
+		}
+	}
 
 	adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_SENDING;
 
@@ -247,9 +374,9 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 		return MACNOBUF;
 	}
 
-	PLTFM_MSG_TRACE("pkt ofld add. alloc_id: %d, free cnt: %d, use cnt: %d\n",
-			alloc_id, ofld_info->free_id_count,
-			ofld_info->used_id_count);
+	PLTFM_MSG_ALWAYS("[pktofld] add. alloc_id: %d, free cnt: %d, use cnt: %d\n",
+			 alloc_id, ofld_info->free_id_count,
+			 ofld_info->used_id_count);
 
 	buf = (u8 *)PLTFM_MALLOC(total_size);
 	if (!buf) {
@@ -281,6 +408,7 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 	if (ret)
 		adapter->sm.pkt_ofld = MAC_AX_OFLD_H2C_IDLE;
 	ofld_info->last_op = PKT_OFLD_OP_ADD;
+	ofld_info->last_op_id = (u8)alloc_id;
 
 	return ret;
 }

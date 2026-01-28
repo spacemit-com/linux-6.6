@@ -72,6 +72,8 @@
 #define RTK_WKARD_CORE_BTC_STBC_CAP
 #endif
 
+/* #define RTW_WKARD_SD_RESET_DISABLE */
+
 /*
  * Public General Config
  */
@@ -224,7 +226,9 @@
 #define CONFIG_FW_SPECIFY_FROM_CORE
 #ifdef CONFIG_FW_SPECIFY_FROM_CORE
 #ifdef CONFIG_WOWLAN
-#define MAC_FW_CATEGORY_WOWLAN
+/* #define MAC_FW_CATEGORY_WOWLAN */
+/* Support APFv6 & MDNS OFFLOAD*/
+#define MAC_FW_CATEGORY_WOWLANCE
 #endif /*CONFIG_WOWLAN*/
 #define MAC_FW_8852B_U2
 #define MAC_FW_8852B_U3
@@ -268,13 +272,13 @@
 #endif /* !CONFIG_MP_INCLUDED */
 
 #ifdef CONFIG_POWER_SAVE
-	/* #define CONFIG_RTW_IPS */
-	/* #define CONFIG_RTW_LPS */
+	#define CONFIG_RTW_IPS
+	#define CONFIG_RTW_LPS
 	#ifdef CONFIG_RTW_IPS
 		#define CONFIG_FWIPS
 	#endif
 	#if defined(CONFIG_RTW_IPS) || defined(CONFIG_RTW_LPS)
-		/* #define CONFIG_RTW_WKARD_PS_DEFAULT_OFF */
+		#define CONFIG_RTW_WKARD_PS_DEFAULT_OFF
 		#define CONFIG_PS_FW_DBG
 	#endif
 	#ifdef CONFIG_WOWLAN
@@ -293,6 +297,10 @@
 #ifdef CONFIG_WOWLAN
 	#define CONFIG_GTK_OL
 	/* #define CONFIG_ARP_KEEP_ALIVE */
+#ifdef CONFIG_WOW_APF
+	#define CONFIG_APF_VERSION 6
+	#define CONFIG_APF_RAM_SIZE 1792
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_GPIO_WAKEUP
@@ -325,7 +333,7 @@
 	#define RTW_MAX_MGMT_TX_MS_GAS 2000
 #endif /* CONFIG_XMIT_ACK */
 
-#define CONFIG_PHL_CPU_BALANCE_THREAD
+/*#define CONFIG_PHL_CPU_BALANCE_THREAD*/
 #ifdef CONFIG_PHL_CPU_BALANCE_THREAD
 #define CPU_ID_TX 2
 #define CPU_ID_TX_CB 3

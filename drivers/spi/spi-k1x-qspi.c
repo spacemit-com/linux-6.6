@@ -108,7 +108,7 @@
 #define QSPI_SMPR_DDRSMP_MASK		GENMASK(18, 16)
 #define QSPI_SMPR_FSDLY_MASK		BIT(6)
 #define QSPI_SMPR_FSPHS_MASK		BIT(5)
-#define QSPI_SMPR_FSPHS_CLK		(416000000)
+#define QSPI_SMPR_FSPHS_CLK		(312000000)
 #define QSPI_SMPR_HSENA_MASK		BIT(0)
 
 #define QSPI_RBSR			0x10c
@@ -1467,7 +1467,7 @@ static int k1x_qspi_probe(struct platform_device *pdev)
 	if (of_property_read_u32(dev->of_node, "k1x,qspi-sfb1ad", &qspi->sfb1ad))
 		qspi->sfb1ad = QSPI_FLASH_B1_TOP;
 	else
-		qspi->sfb1ad = qspi->sfa2ad;
+		qspi->sfb1ad += qspi->sfa2ad;
 	if (of_property_read_u32(dev->of_node, "k1x,qspi-sfb2ad", &qspi->sfb2ad))
 		qspi->sfb2ad = QSPI_FLASH_B2_TOP;
 	else

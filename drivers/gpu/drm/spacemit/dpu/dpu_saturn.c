@@ -262,6 +262,9 @@ static int dpu_parse_dt(struct spacemit_dpu *dpu, struct device_node *np)
 	if (of_property_read_u32(np, "spacemit-dpu-escclk", &dpu->escclk))
 		dpu->escclk = DPU_ESCCLK_DEFAULT;
 
+	if (of_property_read_u32(np, "spacemit-dpu-workmode", &dpu->work_mode))
+		dpu->work_mode = SPACEMIT_DPU_MODE_VIDEO;
+
 	return 0;
 }
 
@@ -1299,7 +1302,7 @@ static void saturn_conf_dpuctrl(struct drm_crtc *crtc,
 		/* TODO */
 		break;
 	default:
-		DRM_ERROR("%s, dpu_id %d is invalid!\n", __func__, dpu->dev_id);
+		DRM_ERROR("%s, dpu id %d is invalid!\n", __func__, dpu->dev_id);
 		break;
 	}
 }
@@ -1357,7 +1360,7 @@ static void saturn_ctrl_cfg_ready(struct spacemit_dpu *dpu, bool enable)
 		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl4_nml_cfg_rdy, enable ? 1 : 0);
 		break;
 	default:
-		DRM_ERROR("id is invalid!\n");
+		DRM_ERROR("dpu id is invalid!\n");
 		break;
 	}
 }
@@ -1384,7 +1387,7 @@ static void saturn_ctrl_sw_start(struct spacemit_dpu *dpu, bool enable)
 		dpu_write_reg_w1c(hwdev, DPU_CTL_REG, base, ctl3_sw_start, enable ? 1 : 0);
 		break;
 	default:
-		DRM_ERROR("id is invalid!\n");
+		DRM_ERROR("dpu id is invalid!\n");
 		break;
 	}
 }
@@ -1431,6 +1434,36 @@ static void saturn_init_csc(struct spacemit_dpu *dpu){
 	}
 }
 
+static void saturn_ctl_cmd_update(struct spacemit_dpu *dpu, bool enable)
+{
+	u32 base = DPU_CTRL_BASE_ADDR;
+	struct spacemit_drm_private *priv = dpu->crtc.dev->dev_private;
+	struct spacemit_hw_device *hwdev = priv->hwdev;
+
+	trace_saturn_ctl_cmd_update(dpu->dev_id, enable);
+
+	switch (dpu->dev_id) {
+	case ONLINE0:
+		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl0_nml_cmd_updt_en, enable ? 1 : 0);
+		break;
+	case ONLINE1:
+		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl1_nml_cmd_updt_en, enable ? 1 : 0);
+		break;
+	case ONLINE2:
+		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl2_nml_cmd_updt_en, enable ? 1 : 0);
+		break;
+	case OFFLINE0:
+		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl3_nml_cmd_updt_en, enable ? 1 : 0);
+		break;
+	case OFFLINE1:
+		dpu_write_reg(hwdev, DPU_CTL_REG, base, ctl4_nml_cmd_updt_en, enable ? 1 : 0);
+		break;
+	default:
+		DRM_ERROR("dpu id is invalid!\n");
+		break;
+	}
+}
+
 static void saturn_init_regs(struct spacemit_dpu *dpu)
 {
 	u32 base = 0;
@@ -1469,7 +1502,15 @@ static void saturn_init_regs(struct spacemit_dpu *dpu)
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, sbs_en, 0);
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, split_en, 0);
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, narrow_yuv_en, 0);
-	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, cmd_screen, 0);
+
+	if (dpu->work_mode == SPACEMIT_DPU_MODE_CMD) {
+		dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, cmd_screen, 1);
+		dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, split_cfg_manual_en, 0);
+		dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, disp_ready_man_en, 0);
+		dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, disp_ready_1_non_active, 0);
+	} else
+		dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, cmd_screen, 0);
+
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, frame_timing_en, 1);
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, split_overlap, 0);
 	dpu_write_reg(hwdev, OUTCTRL_TOP_X_REG, base, hblank, 0);
@@ -1504,8 +1545,13 @@ static void saturn_init_regs(struct spacemit_dpu *dpu)
 	// 	DRM_INFO("%s read OUTCTRL_TOP_X_REG value32[31] 0x%x", __func__, value);
 	// }
 
-	dpu_write_reg(hwdev, DPU_CTL_REG, DPU_CTRL_BASE_ADDR, ctl2_video_mod, 0x1);
+	if (dpu->work_mode == SPACEMIT_DPU_MODE_CMD) {
+		dpu_write_reg(hwdev, DPU_CTL_REG, DPU_CTRL_BASE_ADDR, ctl2_video_mod, 0x0);
+	} else {
+		dpu_write_reg(hwdev, DPU_CTL_REG, DPU_CTRL_BASE_ADDR, ctl2_video_mod, 0x1);
+	}
 	dpu_write_reg(hwdev, DPU_CTL_REG, DPU_CTRL_BASE_ADDR, ctl2_dbg_mod, 0x0);
+
 	/*
 	 * ctl2_timing_inter0 use default value
 	 * ctl2_timing_inter1 = 2 * ⌈fmclk / fdscclk⌉, set 0xf as max value
@@ -1597,6 +1643,7 @@ static int dpu_init(struct spacemit_dpu *dpu)
 	void __iomem *addr = (void __iomem *)ioremap(0xD4282800, 100);
 #endif
 	void __iomem *ciu_addr = (void __iomem *)ioremap(0xD4282C00, 0x200);
+	void __iomem *spare_addr = (void __iomem *)ioremap(0xC0300300, 0x20);
 	u32 value;
 
 	DRM_INFO("%s \n", __func__);
@@ -1626,6 +1673,16 @@ static int dpu_init(struct spacemit_dpu *dpu)
 	udelay(2);
 	value = readl_relaxed(ciu_addr + 0x0124);
 	DRM_DEBUG("%s ciu offset 0x0124:0x%x\n", __func__, value);
+
+	if (dpu->work_mode == SPACEMIT_DPU_MODE_CMD) {
+		// enable cpn
+		value = readl(spare_addr + SPARE_CFG_OFFSET);
+		DRM_DEBUG("%s spare offset 0x18:0x%x\n", __func__, value);
+		value |= (CFG_DSI_HCLK_DIS | CFG_CPN_EN | CFG_VPN_EN);
+		writel(value, (spare_addr + SPARE_CFG_OFFSET));
+	}
+
+	iounmap(spare_addr);
 
 	saturn_init_regs(dpu);
 	saturn_setup_dma_top(dpu);
@@ -1763,6 +1820,9 @@ static void dpu_run(struct drm_crtc *crtc,
 
 	/* config dpuctrl modules */
 	saturn_conf_dpuctrl(crtc, old_state);
+
+	if (dpu->work_mode == SPACEMIT_DPU_MODE_CMD)
+		saturn_ctl_cmd_update(dpu, true);
 
 	//dsb(sy);
 	mb();

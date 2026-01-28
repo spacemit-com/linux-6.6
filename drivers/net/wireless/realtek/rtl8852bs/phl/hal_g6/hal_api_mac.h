@@ -291,6 +291,10 @@ enum rtw_hal_status
 rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
 			  struct rtw_mdns_ofld_info *cfg);
 #endif
+#ifdef CONFIG_PHL_WOW_APF
+enum rtw_hal_status
+rtw_hal_mac_cfg_apf_ofld(struct hal_info_t *hal_info, u16 macid, struct rtw_apf_info *cfg, u8 set);
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PHL_SCANOFLD

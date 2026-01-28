@@ -208,7 +208,7 @@ const struct btc_chip chip_8852bt = {
 	0x8852B, /* chip id */
 	0x0, /* chip HW feature/parameter, refer to enum btc_chip_feature */
 	0x7, /* desired bt_ver */
-	0x070f0000, /* desired wl_fw btc ver  */
+	0x07100000, /* desired wl_fw btc ver  */
 	0x1, /* scoreboard version */
 	0x1, /* mailbox version*/
 	BTC_COEX_RTK_MODE, /* pta_mode */
@@ -252,7 +252,7 @@ const struct btc_chip chip_8851b = {
 	0x8851B, /* chip id */
 	0x0, /* chip HW feature/parameter, refer to enum btc_chip_feature */
 	0x7, /* desired bt_ver */
-	0x070f0000, /* desired wl_fw btc ver  */
+	0x07100000, /* desired wl_fw btc ver  */
 	0x1, /* scoreboard version */
 	0x1, /* mailbox version*/
 	BTC_COEX_RTK_MODE, /* pta_mode */
@@ -274,7 +274,7 @@ const struct btc_chip chip_8852b = {
 	0x8852B, /* chip id */
 	0x0, /* chip HW feature/parameter, refer to enum btc_chip_feature */
 	0x7, /* desired bt_ver */
-	0x070e0000, /* desired wl_fw btc ver  */
+	0x070f0000, /* desired wl_fw btc ver  */
 	0x1, /* scoreboard version */
 	0x1, /* mailbox version*/
 	BTC_COEX_RTK_MODE, /* pta_mode */

@@ -4424,9 +4424,6 @@ void stop_ap_mode(_adapter *padapter)
 		rtw_warn_on(1);
 
 	pmlmepriv->update_bcn = _FALSE;
-	/*pmlmeext->bstart_bss = _FALSE;*/
-	padapter->netif_up = _FALSE;
-	/* _rtw_spinlock_free(&pmlmepriv->bcn_update_lock); */
 
 	/* reset and init security priv , this can refine with rtw_reset_securitypriv */
 	_rtw_memset((unsigned char *)&padapter->securitypriv, 0, sizeof(struct security_priv));

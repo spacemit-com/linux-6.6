@@ -93,6 +93,7 @@ enum rtw_hal_status {
 #define FW_FILE_NIC_POSTFIX ""
 #define FW_FILE_NIC_CE_POSTFIX "_ce"
 #define FW_FILE_WOWLAN_POSTFIX "_wowlan"
+#define FW_FILE_WOWLAN_CE_POSTFIX "_wowlan_ce"
 #define FW_FILE_SPIC_POSTFIX "_spic"
 #define FW_FILE_AP_POSTFIX "_ap"
 
@@ -1247,6 +1248,9 @@ struct rtw_hal_wow_cfg {
 	struct rtw_periodic_wake_info *periodic_wake_cfg;
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 	struct rtw_mdns_ofld_info *mdns_ofld_info;
+#endif
+#ifdef CONFIG_PHL_WOW_APF
+	struct rtw_apf_info *apf_info;
 #endif
 };
 #endif /* CONFIG_WOWLAN */

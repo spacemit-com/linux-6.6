@@ -228,7 +228,7 @@ struct chip_data {
 	int gpio_cs_inverted;
 	int (*write)(struct spi_driver_data *drv_data);
 	int (*read)(struct spi_driver_data *drv_data);
-	void (*cs_control)(u32 command);
+	void (*cs_control)(struct spi_driver_data *drv_data, u32 command);
 };
 
 static inline u32 k1x_spi_read(const struct spi_driver_data *drv_data,
@@ -275,8 +275,8 @@ extern int k1x_spi_set_dma_burst_and_threshold(struct chip_data *chip,
 						  u32 *burst_code,
 						  u32 *threshold);
 
-#define RX_THRESH_DFLT	9
-#define TX_THRESH_DFLT	8
+#define RX_THRESH_DFLT	16
+#define TX_THRESH_DFLT	16
 /* 0x14  */
 #define STATUS_TFL_MASK		(0x1f << 7)	/* Transmit FIFO Level mask */
 #define STATUS_RFL_MASK		(0x1f << 15)	/* Receive FIFO Level mask */

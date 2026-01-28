@@ -1645,6 +1645,8 @@ static void fw_bin_ready(struct mvx_fw_bin *bin,
 		goto unregister_csession;
 
 	ret = mvx_session_put(session);
+	/* Wake up possible waiters (e.g. streamon waiting for pending fw). */
+	wake_up(&session->waitq);
 	if (ret == 0 && lock_failed == 0)
 		mutex_unlock(session->isession.mutex);
 
@@ -1660,6 +1662,8 @@ put_fw_bin:
 	session->fw_bin = NULL;
 
 	ret = mvx_session_put(session);
+	/* Wake up possible waiters. */
+	wake_up(&session->waitq);
 	if (ret == 0 && lock_failed == 0)
 		mutex_unlock(session->isession.mutex);
 }
@@ -2149,6 +2153,45 @@ int mvx_session_send_eos(struct mvx_session *session)
 	return 0;
 }
 
+/* Wait for async firmware load (fw_bin == ERR_PTR(-EINPROGRESS)) to resolve. */
+static int wait_fw_bin_resolve(struct mvx_session *session)
+{
+	int ret;
+
+	while (IS_ERR(session->fw_bin) &&
+		PTR_ERR(session->fw_bin) == -EINPROGRESS &&
+		session->error == 0) {
+		/* Let streamoff/irq/fw_bin_ready run. */
+		mutex_unlock(session->isession.mutex);
+
+		ret = wait_event_timeout(session->waitq,
+			session->error != 0 ||
+			!IS_ERR(session->fw_bin) ||
+			!is_stream_on(session),
+			msecs_to_jiffies(session_wait_pending_timeout));
+
+		mutex_lock(session->isession.mutex);
+
+		if (ret < 0)
+			return ret;
+
+		if (ret == 0)
+			return -ETIME;
+
+		/* If stream got turned off while waiting, abort this streamon. */
+		if (!is_stream_on(session))
+			return -EAGAIN;
+	}
+
+	if (session->error != 0)
+		return session->error;
+
+	if (IS_ERR(session->fw_bin))
+		return PTR_ERR(session->fw_bin);
+
+	return 0;
+}
+
 int mvx_session_streamon(struct mvx_session *session,
 			 enum mvx_direction dir)
 {
@@ -2179,6 +2222,15 @@ int mvx_session_streamon(struct mvx_session *session,
 	/* Verify that a firmware binary load is not in progress. */
 	if (IS_ERR(session->fw_bin)) {
 		ret = PTR_ERR(session->fw_bin);
+		MVX_SESSION_WARN(session, "mvx_session_streamon firmware binary load is not in progress ret=%d", ret);
+		/* If fw is loading, wait instead of failing with -EINPROGRESS. */
+		if (ret == -EINPROGRESS) {
+			ret = wait_fw_bin_resolve(session);
+			if (ret != 0)
+				goto disable_port;
+		} else {
+			goto disable_port;
+		}
 		goto disable_port;
 	}
 
@@ -2260,6 +2312,9 @@ int mvx_session_streamoff(struct mvx_session *session,
 	MVX_SESSION_INFO(session, "Stream off. dir=%u, flushed=%d, is_flushing=%d, isreallocting=%d, isallocparam=%d, force_stop=%d", dir,port->flushed,port->is_flushing,port->isreallocting,port->isallocparam,force_stop);
 
 	port->stream_on = false;
+
+	/* Wake any thread waiting for fw_bin pending resolution. */
+	wake_up(&session->waitq);
 
 	if (is_fw_loaded(session) != false) {
 		/*

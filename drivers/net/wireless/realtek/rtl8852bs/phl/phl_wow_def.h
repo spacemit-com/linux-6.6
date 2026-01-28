@@ -302,6 +302,38 @@ struct rtw_mdns_ofld_info {
 	struct rtw_mdns_ipv6_header mdns_ipv6_header;
 };
 #endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_WOW_APF
+#ifdef CONFIG_APF_RAM_SIZE
+#define MAX_APF_PROG_SIZE CONFIG_APF_RAM_SIZE
+#else
+#warning "CONFIG_APF_RAM_SIZE is not defined, using default ram size 1024"
+#define MAX_APF_PROG_SIZE 1024
+#endif
+
+struct rtw_apf_info {
+	u8 apf_en;
+	u8 apf_prog_num;
+	u16 apf_prog_total_size;
+	u8 apf_prog[MAX_APF_PROG_SIZE];
+	u16 apf_prog_len;
+	u16 apf_data_len;
+	/* index for indicate ofld seq */
+	u8 idx_apf_prog_ofld;
+	/* id for apf response mac hdr pkt ofld */
+	u8 mac_pktid;
+	/* id for apf prog */
+	u8 program_pktid;
+	/* dummy, this will be replace by apf prog */
+	u8 a1[MAC_ADDRESS_LENGTH];
+	/* sta mac addr */
+	u8 a2[MAC_ADDRESS_LENGTH];
+	/* bssid */
+	u8 a3[MAC_ADDRESS_LENGTH];
+	u8 protect_bit;
+	u8 sec_hdr_len;
+};
+#endif /* CONFIG_PHL_WOW_APF */
+
 
 struct rtw_wow_wake_info {
 	/* core */
@@ -353,6 +385,9 @@ void rtw_phl_cfg_arp_ofld_info(void *phl, struct rtw_arp_ofld_info *info);
 void rtw_phl_cfg_ndp_ofld_info(void *phl, struct rtw_ndp_ofld_info *info);
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 void rtw_phl_cfg_mdns_ofld_info(void *phl, struct rtw_mdns_ofld_info *info);
+#endif
+#ifdef CONFIG_PHL_WOW_APF
+void rtw_phl_cfg_apf_info(void *phl, struct rtw_apf_info *info);
 #endif
 enum rtw_phl_status rtw_phl_remove_wow_ptrn_info(void *phl, u8 phl_ptrn_id);
 enum rtw_phl_status rtw_phl_add_wow_ptrn_info(void *phl, struct rtw_wowcam_upd_info *info, u8 *phl_ptrn_id);

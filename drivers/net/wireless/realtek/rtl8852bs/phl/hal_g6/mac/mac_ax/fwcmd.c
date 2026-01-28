@@ -102,6 +102,9 @@ static struct c2h_proc_func c2h_proc_fw_ofld_cmd[] = {
 #if	MAC_FEAT_BCN_CNT
 	{c2h_bcn_sync_rpt_info, FWCMD_C2H_FUNC_BCN_SYNC_RPT},
 #endif
+#ifdef CONFIG_PHL_APF
+	{c2h_apf_ofld_report_hdl, FWCMD_C2H_FUNC_APF_OFLD_RPT},
+#endif
 	{NULL, FWCMD_C2H_FUNC_NULL},
 };
 
@@ -116,7 +119,6 @@ static struct c2h_proc_func c2h_proc_twt_cmd[] = {
 
 static struct c2h_proc_func c2h_proc_wow_cmd[] = {
 	{c2h_wow_aoac_report_hdl, FWCMD_C2H_FUNC_AOAC_REPORT},
-	{c2h_wow_apf_report_hdl, FWCMD_C2H_FUNC_APF_RPT},
 	{NULL, FWCMD_C2H_FUNC_NULL},
 };
 
@@ -211,6 +213,10 @@ static struct c2h_event_id_proc event_proc[] = {
 #if NINTENDO_EN
 	{get_twt_notify_event, FWCMD_C2H_CAT_MAC, FWCMD_C2H_CL_TWT,
 	 FWCMD_C2H_FUNC_TWT_NOTIFY_EVT},
+#endif
+#ifdef CONFIG_PHL_APF
+	{get_apf_rpt_notify_event, FWCMD_C2H_CAT_MAC, FWCMD_C2H_CL_FW_OFLD,
+	 FWCMD_C2H_FUNC_APF_OFLD_RPT},
 #endif
 	{NULL, FWCMD_C2H_CAT_NULL, FWCMD_C2H_CL_NULL,
 	 FWCMD_C2H_FUNC_NULL},
@@ -1160,6 +1166,7 @@ static u32 c2h_fwofld_rcv_ack_hdl(struct mac_ax_adapter *adapter,
 
 	switch (info->c2h_func) {
 	case FWCMD_H2C_FUNC_PACKET_OFLD:
+		PLTFM_MSG_TRACE("[pktofld] rcv ack\n");
 		state = &adapter->sm.pkt_ofld;
 		break;
 
@@ -1328,15 +1335,17 @@ static u32 c2h_fwofld_done_ack_hdl(struct mac_ax_adapter *adapter,
 	case FWCMD_H2C_FUNC_PACKET_OFLD:
 		if (sm->pkt_ofld == MAC_AX_OFLD_H2C_RCVD) {
 			if (info->h2c_return == MACSUCCESS) {
+				PLTFM_MSG_TRACE("[pktofld] done ack ok\n");
 				if (ofld_info->last_op == PKT_OFLD_OP_READ)
 					sm->pkt_ofld = MAC_AX_OFLD_H2C_DONE;
 				else
 					sm->pkt_ofld = MAC_AX_OFLD_H2C_IDLE;
 			} else {
+				PLTFM_MSG_TRACE("[pktofld] done ack fail (%d)\n", info->h2c_return);
 				sm->pkt_ofld = MAC_AX_OFLD_H2C_ERROR;
 			}
 		} else {
-			PLTFM_MSG_ERR("cant set pkt ofld state since no recv ack is received.");
+			PLTFM_MSG_ERR("[pktofld] cant set pkt ofld state (no recv ack is rcved)\n");
 		}
 		break;
 
@@ -1424,6 +1433,18 @@ static u32 c2h_fwofld_done_ack_hdl(struct mac_ax_adapter *adapter,
 			PLTFM_MSG_TRACE("[RXFWD] done ack success.\n");
 		else
 			PLTFM_MSG_ERR("[RXFWD] done ack fail (%d)\n", info->h2c_return);
+		break;
+#ifdef CONFIG_PHL_APF
+	case FWCMD_H2C_FUNC_APF_OFLD_CTRL:
+		if (info->h2c_return == MACSUCCESS)
+			PLTFM_MSG_ERR("[APF_CTRL] done ack success.\n");
+		else
+			PLTFM_MSG_ERR("[APF_CTRL] done ack fail (%d)\n", info->h2c_return);
+
+		sm->proxy_st = MAC_AX_PROXY_IDLE;
+		sm->proxy_ret = info->h2c_return;
+		break;
+#endif // CONFIG_PHL_APF
 	default:
 		break;
 	}
@@ -1969,9 +1990,9 @@ static u32 c2h_pkt_ofld_rsp_hdl(struct mac_ax_adapter *adapter, u8 *buf,
 	pkt_len = GET_FIELD(c2h_content, FWCMD_C2H_PKT_OFLD_RSP_PKT_LENGTH);
 	id = GET_FIELD(c2h_content, FWCMD_C2H_PKT_OFLD_RSP_PKT_ID);
 
-	PLTFM_MSG_TRACE("get pktofld rsp. pkt_op: %d, pkt_len: %d, id: %d\n", pkt_op, pkt_len, id);
+	PLTFM_MSG_TRACE("[pktofld] get rsp. op: %d, len: %d, id: %d\n", pkt_op, pkt_len, id);
 	if (id == PKT_OFLD_NOT_EXISTS_ID) {
-		PLTFM_MSG_ERR("pktofld id %d is for NOT_EXISTS and shouldn't be rpt from fw\n",
+		PLTFM_MSG_ERR("[pktofld] id %d is for NOT_EXISTS and shouldn't be rpt from fw\n",
 			      PKT_OFLD_NOT_EXISTS_ID);
 		return MACNOITEM;
 	}
@@ -1989,13 +2010,12 @@ static u32 c2h_pkt_ofld_rsp_hdl(struct mac_ax_adapter *adapter, u8 *buf,
 		break;
 
 	case PKT_OFLD_OP_DEL:
-		if (pkt_len != 0) {
-			if (ofld_info->id_bitmap[id >> 3] & (1 << (id & 7))) {
-				ofld_info->free_id_count++;
-				ofld_info->used_id_count--;
-			}
-			ofld_info->id_bitmap[id >> 3] &= ~(1 << (id & 7));
+		if (mac_pkt_ofld_get_bitmap(ofld_info->id_bitmap, id)) {
+			ofld_info->free_id_count++;
+			ofld_info->used_id_count--;
 		}
+		mac_pkt_ofld_unset_bitmap(adapter, ofld_info->id_bitmap, id);
+		mac_pkt_ofld_unset_bitmap(adapter, ofld_info->id_to_del_bitmap, id);
 
 		break;
 
@@ -2018,7 +2038,7 @@ static u32 c2h_pkt_ofld_rsp_hdl(struct mac_ax_adapter *adapter, u8 *buf,
 		break;
 
 	default:
-		PLTFM_MSG_ERR("[ERR]invalid packet offload op: %d", pkt_op);
+		PLTFM_MSG_ERR("[pktofld] invalid packet offload op: %d", pkt_op);
 		break;
 	}
 	if (sm->pkt_ofld == MAC_AX_OFLD_H2C_ERROR) {
@@ -2494,26 +2514,33 @@ u32 c2h_wow_aoac_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
 	return MACSUCCESS;
 }
 
-u32 c2h_wow_apf_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
+
+
+u32 c2h_apf_ofld_report_hdl(struct mac_ax_adapter *adapter, u8 *buf, u32 len,
 			   struct rtw_c2h_info *info)
 {
 	u8 *c2h_content = buf + FWCMD_HDR_LEN;
-	struct rtw_hal_mac_apf_report *apf_rpt;
-	u32 ram_len, prog_len, data_len;
 
-	if (adapter->sm.proxy_st != MAC_AX_PROXY_BUSY)
-		return MACPROCERR;
-	apf_rpt = (struct rtw_hal_mac_apf_report *)c2h_content;
-	prog_len = (u32)apf_rpt->prog_info.prog_len;
-	data_len = (u32)apf_rpt->prog_info.data_len;
-	ram_len = prog_len + data_len;
+	struct rtw_hal_mac_apf_ofld_report *apf_ofld_rpt;
+	u32 num;
+	u8 *fw_ptr, *ram_buf;
+	u32 *ptr_status = NULL;
 
-	if (adapter->apf_info.ptr[apf_rpt->program_num] != 0x0) {
-		PLTFM_MEMCPY(adapter->apf_info.ptr[apf_rpt->program_num],
-			     &apf_rpt->program_ptr, ram_len);
+	apf_ofld_rpt = (struct rtw_hal_mac_apf_ofld_report *)c2h_content;
+	fw_ptr = (u8 *)&apf_ofld_rpt->rpt_ptr;
+	num = apf_ofld_rpt->num;
+
+	ram_buf = (u8 *)adapter->apf_info.ptr_apf_ram_buffer;
+
+	if (apf_ofld_rpt->len != 0)
+		PLTFM_MEMCPY((ram_buf + apf_ofld_rpt->offset_len)
+			     , fw_ptr, apf_ofld_rpt->len);
+
+	if (adapter->apf_info.ptr_status) {
+		ptr_status = adapter->apf_info.ptr_status;
+		*ptr_status = apf_ofld_rpt->status;
 	}
 
-	adapter->sm.proxy_st = MAC_AX_PROXY_IDLE;
 	return MACSUCCESS;
 }
 
@@ -3952,6 +3979,17 @@ static u32 get_twt_notify_event(struct mac_ax_adapter *adapter,
 						    FWCMD_C2H_TWT_NOTIFY_EVT_TSF_HIGH);
 	*id = MSG_EVT_TWT_NOTIFY_EVT;
 
+	return MACSUCCESS;
+}
+#endif
+
+#ifdef CONFIG_PHL_APF
+static u32 get_apf_rpt_notify_event(struct mac_ax_adapter *adapter,
+				struct rtw_c2h_info *c2h,
+				enum phl_msg_evt_id *id,
+				u8 *c2h_info)
+{
+	*id = MSG_EVT_APF_RPT_DONE;
 	return MACSUCCESS;
 }
 #endif

@@ -127,6 +127,9 @@ struct wow_priv {
 #ifdef CONFIG_MDNS_OFFLOAD
 	struct rtw_mdns_ofld_info mdns_ofld_info; //ryan
 #endif
+#ifdef CONFIG_WOW_APF
+		struct rtw_apf_info apf_info;
+#endif
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 	struct rtw_periodic_wake_info wow_periodic_wake;
 #endif
@@ -179,6 +182,13 @@ int rtw_wow_add_mdns_passthru_name(_adapter *padapter, u8 *name, u8 name_len);
 void rtw_wow_clr_mdns_passthru_name(_adapter *padapter);
 void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru_list **passthru_list);
 #endif
+
+#ifdef CONFIG_WOW_APF
+u8 rtw_wow_set_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 apf_prog_len);
+u8 rtw_wow_get_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 *apf_prog_len);
+u8 rtw_wow_clear_apf(struct _ADAPTER *padapter);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PNO_SUPPORT

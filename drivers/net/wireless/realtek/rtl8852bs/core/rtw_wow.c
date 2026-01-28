@@ -123,6 +123,12 @@ void rtw_init_wow(_adapter *padapter)
 	_rtw_memset(&wowpriv->mdns_ofld_info, 0,
 			sizeof(struct rtw_mdns_ofld_info));
 #endif
+#ifdef CONFIG_WOW_APF
+	wowpriv->apf_info.apf_en = 0;
+	wowpriv->apf_info.apf_prog_num = 0;
+	wowpriv->apf_info.apf_prog_total_size = 0;
+	_rtw_memset(wowpriv->apf_info.apf_prog, 0, MAX_APF_PROG_SIZE);
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_WOW_PERIODIC_WAKE
@@ -134,12 +140,26 @@ void rtw_init_wow(_adapter *padapter)
 void rtw_free_wow(_adapter *adapter)
 {
 	struct pwrctrl_priv *pwrctrlpriv = adapter_to_pwrctl(adapter);
+#ifdef CONFIG_WOW_APF
+	struct wow_priv *wowpriv = adapter_to_wowlan(adapter);
+	struct rtw_apf_info *apf_info = &wowpriv->apf_info;
+#endif
 
 	_rtw_mutex_free(&pwrctrlpriv->wowlan_pattern_cam_mutex);
 
 #if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_ANDROID_POWER)
 	rtw_unregister_early_suspend(pwrctrlpriv);
 #endif /* CONFIG_HAS_EARLYSUSPEND || CONFIG_ANDROID_POWER */
+#ifdef CONFIG_WOW_APF
+	RTW_INFO("%s() clear apf prog related resource\n", __func__);
+	RTW_INFO("apf prog num(%u)\n", apf_info->apf_prog_num);
+
+	apf_info->apf_prog_len = 0;
+	apf_info->apf_data_len = 0;
+	apf_info->apf_en = 0;
+	apf_info->apf_prog_num = 0;
+	apf_info->apf_prog_total_size = 0;
+#endif /* CONFIG_WOW_APF */
 }
 
 void rtw_wowlan_set_pattern_cast_type(_adapter *adapter, struct rtw_wowcam_upd_info *wowcam_info)
@@ -739,6 +759,90 @@ void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru
 	*passthru_list = &ofld_info->passthru_list;
 }
 #endif /* CONFIG_MDNS_OFFLOAD */
+
+#ifdef CONFIG_WOW_APF
+u8 rtw_wow_set_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 apf_prog_len)
+{
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u16 apf_ram_len;
+	u16 apf_data_len;
+
+	RTW_INFO("%s()\n", __func__);
+	/*data len = apf_ram_len() - apf_prog_len*/
+	apf_data_len = MAX_APF_PROG_SIZE - apf_prog_len;
+	RTW_INFO("apf_prog_len(%u) apf_data_len(%u)\n", apf_prog_len, apf_data_len);
+	apf_ram_len = apf_prog_len + apf_data_len;
+	/* Check apf prog limitation */
+	if (apf_ram_len > MAX_APF_PROG_SIZE) {
+		RTW_ERR("%s() apf prog size (%u) exceed prog limit(%u)\n",
+				__func__, apf_ram_len, MAX_APF_PROG_SIZE);
+	}
+
+	/* Dont clear apf program ram, this apf ram is controlled by android */
+	info->apf_prog_len = apf_prog_len;
+	info->apf_data_len = apf_data_len;
+	_rtw_memcpy(info->apf_prog, apf_prog, apf_prog_len);
+
+	info->apf_prog_num = 1;
+	info->apf_prog_total_size = apf_ram_len;
+
+	if (info->apf_prog_num > 0) {
+		RTW_INFO("%s apf_en is 1\n", __func__);
+		info->apf_en = 1;
+	}
+
+#ifdef CONFIG_WOW_APF_DBG
+	RTW_INFO("[APFDBG]%s() apf prog num(%u) total_size(%u)\n", __func__, info->apf_prog_num, info->apf_prog_total_size);
+	RTW_INFO_DUMP(NULL, info->apf_prog, info->apf_prog_len);
+#endif
+	return _SUCCESS;
+}
+
+u8 rtw_wow_get_apf(struct _ADAPTER *padapter, u8 *apf_prog, u16 *apf_prog_len) {
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u16 apf_ram_len;
+	u8 apf_data_len;
+
+	RTW_INFO("%s()\n", __func__);
+	if (apf_prog == NULL || apf_prog_len == NULL || info->apf_prog == NULL) {
+		RTW_ERR("%s() buffer or apf_prog[%u] is NULL\n", __func__, 0);
+#ifdef CONFIG_WOW_APF_DBG
+		RTW_INFO("[APFDBG]====apf prog_len(%u) data_len(%u)====\n"
+					 , info->apf_prog_len, info->apf_data_len);
+		RTW_INFO_DUMP(NULL, info->apf_prog, info->apf_prog_len + info->apf_data_len);
+#endif
+		return _FAIL;
+	}
+
+	*apf_prog_len = info->apf_prog_len;
+	info->apf_data_len = MAX_APF_PROG_SIZE - info->apf_prog_len;
+	_rtw_memcpy(apf_prog, info->apf_prog, info->apf_prog_len + info->apf_data_len);
+#ifdef CONFIG_WOW_APF_DBG
+	RTW_INFO("[APFDBG]%s() Get apf_prog, prog_len(%u) data_len(%u)\n"
+			 , __func__,  *apf_prog_len, info->apf_data_len);
+	RTW_INFO_DUMP(NULL, apf_prog, *apf_prog_len + info->apf_data_len);
+#endif
+	return _SUCCESS;
+}
+
+u8 rtw_wow_clear_apf(struct _ADAPTER *padapter) {
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct rtw_apf_info *info = &wowpriv->apf_info;
+	u8 apf_ram_len;
+
+	RTW_INFO("%s()\n", __func__);
+	_rtw_memset(info->apf_prog, 0, MAX_APF_PROG_SIZE);
+	info->apf_prog_len = 0;
+	info->apf_data_len = 0;
+	info->apf_en = 0;
+	info->apf_prog_num = 0;
+	info->apf_prog_total_size = 0;
+
+	return _SUCCESS;
+}
+#endif /* CONFIG_WOW_APF */
 
 #ifdef CONFIG_GTK_OL
 void _update_aoac_rpt_phase_0(_adapter *adapter, struct rtw_aoac_report *aoac_info)

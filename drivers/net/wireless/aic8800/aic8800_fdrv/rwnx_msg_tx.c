@@ -244,6 +244,13 @@ static int rwnx_send_msg(struct rwnx_hw *rwnx_hw, const void *msg_params,
 		rwnx_wakeup_unlock(rwnx_hw->ws_tx);
 		return 0;
 	}
+
+	if (atomic_read(&rwnx_hw->sdiodev->is_bus_suspend) == 1) {
+		rwnx_msg_free(rwnx_hw, msg_params);
+		sdio_err("bus is suspend\n");
+		rwnx_wakeup_unlock(rwnx_hw->ws_tx);
+		return 0;
+	}
 #endif
 
 	msg = container_of((void *)msg_params, struct lmac_msg, param);

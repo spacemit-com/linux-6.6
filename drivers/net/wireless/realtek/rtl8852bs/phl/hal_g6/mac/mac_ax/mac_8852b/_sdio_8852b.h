@@ -128,28 +128,7 @@ void w_indir_cmd53_sdio_8852b(struct mac_ax_adapter *adapter, u32 adr, u32 val,
  * @return Please Place Description here.
  * @retval void
  */
-void ud_fs_8852b(struct mac_ax_adapter *adapter);
-/**
- * @}
- * @}
- */
-
-/**
- * @addtogroup HCI
- * @{
- * @addtogroup SDIO
- * @{
- */
-
-/**
- * @brief sdio_pre_init_8852b
- *
- * @param *adapter
- * @param *param
- * @return Please Place Description here.
- * @retval u32
- */
-u32 sdio_pre_init_8852b(struct mac_ax_adapter *adapter, void *param);
+void ud_fs_8852b(struct mac_ax_adapter *adapter, enum sdio_hfc_sel hfc_sel);
 /**
  * @}
  * @}

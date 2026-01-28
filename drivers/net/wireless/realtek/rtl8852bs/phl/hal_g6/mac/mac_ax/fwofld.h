@@ -361,6 +361,12 @@ u32 mac_read_pkt_ofld(struct mac_ax_adapter *adapter, u8 id);
  * @}
  */
 
+void mac_pkt_ofld_unset_bitmap(struct mac_ax_adapter *adapter, u8 *bitmap, u16 index);
+
+u8 mac_pkt_ofld_get_bitmap(u8 *bitmap, u16 index);
+
+u32 mac_pkt_ofld_watchdog(struct mac_ax_adapter *adapter);
+
 /**
  * @addtogroup Firmware
  * @{

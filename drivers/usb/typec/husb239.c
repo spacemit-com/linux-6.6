@@ -481,9 +481,6 @@ static int husb239_usbpd_detect(struct husb239 *husb239)
 		msleep(50);
 	}
 
-	if (count == 0)
-		return -EINVAL;
-
 	return 0;
 }
 
@@ -681,8 +678,13 @@ static void husb239_detach(struct husb239 *husb239)
 
 static void husb239_pd_contract(struct husb239 *husb239)
 {
+	struct typec_info *info = &husb239->info;
+
 	husb239_update_operating_status(husb239);
 	husb239_register_partner(husb239, 1, TYPEC_ACCESSORY_NONE);
+
+	husb239->req_voltage = info->sink_voltage/1000; /* mv */
+	husb239_usbpd_request_voltage(husb239);
 }
 
 static void husb239_get_gpio_irq(struct husb239 *husb239)

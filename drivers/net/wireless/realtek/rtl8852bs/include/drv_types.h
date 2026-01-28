@@ -1044,6 +1044,7 @@ struct rf_ctl_t {
 
 	bool ch_sel_within_same_band;
 
+	u8 edcca_mode_sel;
 	u8 edcca_mode_2g;
 #if CONFIG_IEEE80211_BAND_5GHZ
 	u8 edcca_mode_5g;
@@ -1635,6 +1636,10 @@ enum _DIS_TURBO_EDCA {
 	DIS_TURBO_USE_MANUAL,
 };
 
+enum _DIS_RT_CAP {
+	DIS_MBO = 0,
+};
+
 struct _ADAPTER_LINK {
 	_adapter *adapter;
 	u8 mac_addr[ETH_ALEN]; /* link address */
@@ -1952,6 +1957,7 @@ struct _ADAPTER {
 #endif
 	u8 dis_turboedca;/*	1: disable turboedca,
 					2. disable turboedca,and setting EDCA parameter based on the input parameter*/
+	u32 dis_rt_cap; /* runtime disable CAP for testing */
 	u32 edca_param_mode;
 	u32 last_edca;
 	u8 edca_reset;/*1:be reset 0:not reset*/
@@ -1979,6 +1985,13 @@ struct _ADAPTER {
 #ifdef CONFIG_ECSA_PHL
 	struct core_ecsa_info ecsa_info;
 #endif
+
+	/*
+	* Indicates whether the current TSF command should be enqueued.
+	* true  - enqueue the command
+	* false - do not enqueue
+	*/
+	bool cur_tsf_cmd_enqueue;
 };
 
 #define adapter_to_dvobj(adapter) ((adapter)->dvobj)

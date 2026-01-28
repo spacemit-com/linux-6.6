@@ -253,8 +253,7 @@ static inline u32 k1x_pcie_phy0_reg_readl(struct k1x_pcie *pcie, u32 offset)
 	return readl(pcie->phy0_addr + offset);
 }
 
-static inline void k1x_pcie_phy0_reg_writel(struct k1x_pcie *pcie, u32 offset,
-				      u32 value)
+static inline void k1x_pcie_phy0_reg_writel(struct k1x_pcie *pcie, u32 offset, u32 value)
 {
 	writel(value, pcie->phy0_addr + offset);
 }
@@ -365,8 +364,7 @@ void porta_rterm(struct k1x_pcie *k1x)
 
 	// wait pm0 rterm done
 	count = 0;
-	do
-	{
+	do {
 		//rd_data = REG32(0xC0B10000 + 0x21 * 4);
 		rd_data = k1x_pcie_phy0_reg_readl(k1x, (0x21 * 4));
 		if (count++ > 5000) {
@@ -603,8 +601,7 @@ static int init_phy(struct k1x_pcie *k1x)
 	// waiting pll lock
 	pr_debug("waiting pll lock...\n");
 	count = 0;
-	do
-	{
+	do {
 		rd_data = k1x_pcie_phy_reg_readl(k1x, 0x8);
 		if (count++ > 5000) {
 			pr_err("read pcie%d phy rd_data time out.\n", k1x->port_id);
@@ -762,8 +759,7 @@ static void k1x_pcie_setup_msi_msg(struct irq_data *d, struct msi_msg *msg)
 		(int)d->hwirq, msg->address_hi, msg->address_lo);
 }
 
-static int k1x_pcie_msi_set_affinity(struct irq_data *d,
-				   const struct cpumask *mask, bool force)
+static int k1x_pcie_msi_set_affinity(struct irq_data *d, const struct cpumask *mask, bool force)
 {
 	return -EINVAL;
 }
@@ -774,9 +770,8 @@ static struct irq_chip k1x_pcie_msi_bottom_irq_chip = {
 	.irq_set_affinity = k1x_pcie_msi_set_affinity,
 };
 
-static int k1x_pcie_irq_domain_alloc(struct irq_domain *domain,
-				    unsigned int virq, unsigned int nr_irqs,
-				    void *args)
+static int k1x_pcie_irq_domain_alloc(struct irq_domain *domain, unsigned int virq,
+				     unsigned int nr_irqs, void *args)
 {
 	struct dw_pcie_rp *pp = domain->host_data;
 	unsigned long flags;
@@ -785,8 +780,7 @@ static int k1x_pcie_irq_domain_alloc(struct irq_domain *domain,
 
 	raw_spin_lock_irqsave(&pp->lock, flags);
 
-	bit = bitmap_find_free_region(pp->msi_irq_in_use, MAX_MSI_IRQS,
-				      order_base_2(nr_irqs));
+	bit = bitmap_find_free_region(pp->msi_irq_in_use, MAX_MSI_IRQS, order_base_2(nr_irqs));
 
 	raw_spin_unlock_irqrestore(&pp->lock, flags);
 
@@ -794,16 +788,14 @@ static int k1x_pcie_irq_domain_alloc(struct irq_domain *domain,
 		return -ENOSPC;
 
 	for (i = 0; i < nr_irqs; i++)
-		irq_domain_set_info(domain, virq + i, bit + i,
-				    pp->msi_irq_chip,
-				    pp, handle_edge_irq,
-				    NULL, NULL);
+		irq_domain_set_info(domain, virq + i, bit + i, pp->msi_irq_chip,
+				    pp, handle_edge_irq, NULL, NULL);
 
 	return 0;
 }
 
 static void k1x_pcie_irq_domain_free(struct irq_domain *domain,
-				    unsigned int virq, unsigned int nr_irqs)
+				     unsigned int virq, unsigned int nr_irqs)
 {
 	struct irq_data *d = irq_domain_get_irq_data(domain, virq);
 	struct dw_pcie_rp *pp = domain->host_data;
@@ -811,8 +803,7 @@ static void k1x_pcie_irq_domain_free(struct irq_domain *domain,
 
 	raw_spin_lock_irqsave(&pp->lock, flags);
 
-	bitmap_release_region(pp->msi_irq_in_use, d->hwirq,
-			      order_base_2(nr_irqs));
+	bitmap_release_region(pp->msi_irq_in_use, d->hwirq, order_base_2(nr_irqs));
 
 	raw_spin_unlock_irqrestore(&pp->lock, flags);
 }
@@ -828,15 +819,14 @@ int k1x_pcie_allocate_domains(struct dw_pcie_rp *pp)
 	struct fwnode_handle *fwnode = of_node_to_fwnode(pcie->dev->of_node);
 
 	pp->irq_domain = irq_domain_create_linear(fwnode, MAX_MSI_IRQS,
-					       &k1x_pcie_msi_domain_ops, pp);
+						  &k1x_pcie_msi_domain_ops, pp);
 	if (!pp->irq_domain) {
 		dev_err(pcie->dev, "Failed to create IRQ domain\n");
 		return -ENOMEM;
 	}
 
 	irq_domain_update_bus_token(pp->irq_domain, DOMAIN_BUS_NEXUS);
-	pp->msi_domain = pci_msi_create_irq_domain(fwnode,
-						   &k1x_pcie_msi_domain_info,
+	pp->msi_domain = pci_msi_create_irq_domain(fwnode, &k1x_pcie_msi_domain_info,
 						   pp->irq_domain);
 	if (!pp->msi_domain) {
 		dev_err(pcie->dev, "Failed to create MSI domain\n");
@@ -856,8 +846,7 @@ void k1x_pcie_msix_addr_alloc(struct dw_pcie_rp *pp)
 	u32 reg;
 
 	k1x->msix_page = alloc_page(GFP_KERNEL);
-	k1x->msix_addr = dma_map_page(dev, k1x->msix_page, 0, PAGE_SIZE,
-				    DMA_FROM_DEVICE);
+	k1x->msix_addr = dma_map_page(dev, k1x->msix_page, 0, PAGE_SIZE, DMA_FROM_DEVICE);
 	if (dma_mapping_error(dev, k1x->msix_addr)) {
 		dev_err(dev, "Failed to map MSIX address\n");
 		__free_page(k1x->msix_page);
@@ -1001,7 +990,7 @@ int k1x_pcie_wait_for_speed_change(struct dw_pcie *pci)
 	return -ETIMEDOUT;
 }
 
-static int __init k1x_pcie_init_id(struct k1x_pcie *k1x)
+static int k1x_pcie_init_id(struct k1x_pcie *k1x)
 {
 	struct dw_pcie *pci = k1x->pci;
 
@@ -1034,8 +1023,7 @@ static int k1x_pcie_host_init(struct dw_pcie_rp *pp)
 	return 0;
 }
 
-static int k1x_pcie_intx_map(struct irq_domain *domain, unsigned int irq,
-				irq_hw_number_t hwirq)
+static int k1x_pcie_intx_map(struct irq_domain *domain, unsigned int irq, irq_hw_number_t hwirq)
 {
 	irq_set_chip_and_handler(irq, &dummy_irq_chip, handle_simple_irq);
 	irq_set_chip_data(irq, domain->host_data);
@@ -1062,7 +1050,7 @@ static int k1x_pcie_init_irq_domain(struct dw_pcie_rp *pp)
 	}
 
 	k1x->irq_domain = irq_domain_add_linear(pcie_intc_node, PCI_NUM_INTX,
-						   &intx_domain_ops, pp);
+						&intx_domain_ops, pp);
 	if (!k1x->irq_domain) {
 		dev_err(dev, "Failed to get a INTx IRQ domain\n");
 		return -ENODEV;
@@ -1090,7 +1078,7 @@ static void k1x_pcie_msi_irq_handler(struct irq_desc *desc)
 	reg = k1x_pcie_phy_ahb_readl(k1x, ADDR_INTR_STATUS1);
 	k1x_pcie_phy_ahb_writel(k1x, ADDR_INTR_STATUS1, reg);
 	if ((reg & MSI_INT) | (reg & MSIX_INT)) {
-			k1x_handle_msi_irq(pp);
+		k1x_handle_msi_irq(pp);
 	}
 
 	/* legacy intx*/
@@ -1264,7 +1252,7 @@ __maybe_unused static void k1x_pcie_ep_disable_irq(struct dw_pcie_ep *ep)
 }
 
 static int k1x_pcie_raise_irq(struct dw_pcie_ep *ep, u8 func_no,
-				 enum pci_epc_irq_type type, u16 interrupt_num)
+			      enum pci_epc_irq_type type, u16 interrupt_num)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
 	//struct k1x_pcie *k1x = to_k1x_pcie(pci);
@@ -1307,8 +1295,7 @@ static struct dw_pcie_ep_ops pcie_ep_ops = {
 	.get_features = k1x_pcie_get_features,
 };
 
-static int __init k1x_add_pcie_ep(struct k1x_pcie *k1x,
-				     struct platform_device *pdev)
+static int k1x_add_pcie_ep(struct k1x_pcie *k1x, struct platform_device *pdev)
 {
 	int ret;
 	struct dw_pcie_ep *ep;
@@ -1338,8 +1325,7 @@ static int __init k1x_add_pcie_ep(struct k1x_pcie *k1x,
 	return 0;
 }
 
-static int __init k1x_add_pcie_port(struct k1x_pcie *k1x,
-				       struct platform_device *pdev)
+static int k1x_add_pcie_port(struct k1x_pcie *k1x, struct platform_device *pdev)
 {
 	int ret;
 	struct dw_pcie *pci = k1x->pci;
@@ -1499,8 +1485,7 @@ static int k1x_pcie_enable_phy(struct k1x_pcie *k1x)
 	// waiting pll lock
 	pr_debug("waiting pll lock...\n");
 	count = 0;
-	do
-	{
+	do {
 		rd_data = k1x_pcie_phy_reg_readl(k1x, 0x8);
 		if (count++ > 5000) {
 			pr_err("read pcie%d phy rd_data time out.\n", k1x->port_id);
@@ -1721,8 +1706,7 @@ static int k1x_pcie_probe(struct platform_device *pdev)
 		dev_err(dev, "INVALID device type %d\n", mode);
 	}
 
-	ret = devm_request_irq(dev, irq, k1x_pcie_irq_handler,
-			       IRQF_SHARED, "k1x-pcie", k1x);
+	ret = devm_request_irq(dev, irq, k1x_pcie_irq_handler, IRQF_SHARED, "k1x-pcie", k1x);
 	if (ret) {
 		dev_err(dev, "failed to request k1x-pcie irq\n");
 		goto err_clk;

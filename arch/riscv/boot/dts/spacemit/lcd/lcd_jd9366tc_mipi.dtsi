@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/ { lcds: lcds {
+        lcd_jd9366tc_mipi: lcd_jd9366tc_mipi {
+                dsi-work-mode = <1>; /* video burst mode*/
+                dsi-lane-number = <2>;
+                dsi-color-format = "rgb888";
+                width-mm = <108>;
+                height-mm = <172>;
+                use-dcs-write;
+
+                /*mipi info*/
+                height = <1280>;
+                width = <800>;
+                hfp = <40>;
+                hbp = <28>;
+                hsync = <8>;
+                vfp = <140>;
+                vbp = <38>;
+                vsync = <8>;
+                fps = <60>;
+                work-mode = <0>;
+                rgb-mode = <3>;
+                lane-number = <2>;
+                phy-bit-clock = <1000000000>;
+                split-enable = <0>;
+                eotp-enable = <0>;
+                burst-mode = <2>;
+                esd-check-enable = <0>;
+
+                /* DSI_CMD, DSI_MODE, timeout, len, cmd */
+                initial-command = [
+                        39 01 00 02 30 01
+                        39 01 00 05 78 49 61 02 00
+                        39 01 00 02 30 00
+                        39 01 78 02 11 00
+                        39 01 00 02 30 08
+                        39 01 00 02 5D 0D
+                        39 01 00 02 5F 01
+                        39 01 00 02 30 00
+                        39 01 20 02 29 00
+                ];
+
+                sleep-in-command = [
+                        05 01 78 01 28
+                        05 01 20 01 10
+                ];
+                sleep-out-command = [
+                        05 01 78 01 11
+                        05 01 20 01 29
+                ];
+                read-id-command = [
+                        37 01 00 01 01
+                        14 01 00 01 04
+                ];
+
+                display-timings {
+                        timing0 {
+                                clock-frequency = <78000000>;
+                                hactive = <800>;
+                                hfront-porch = <40>;
+                                hback-porch = <28>;
+                                hsync-len = <8>;
+                                vactive = <1280>;
+                                vfront-porch = <140>;
+                                vback-porch = <38>;
+                                vsync-len = <8>;
+                                vsync-active = <1>;
+                                hsync-active = <1>;
+                        };
+                };
+        };
+};};

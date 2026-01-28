@@ -411,7 +411,6 @@ static int dma_init(void)
 	}
 
 	dma_dev = dma_chan->device;
-	dma_set_mask(dma_dev->dev, DMA_BIT_MASK(32));
 
 	INIT_LIST_HEAD(&dmabuf_list);
 	dev_dbg(dma_dev->dev, "dma channel id = %d\n",dma_chan->chan_id);

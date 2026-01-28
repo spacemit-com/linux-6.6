@@ -610,7 +610,10 @@ void _dpk_rf_setting_8852b(
 	/*debug rtxbw*/
 	halrf_wrf(rf, path, 0xde, BIT(2), 0x1);
 	/*txbb filter*/
-	halrf_wrf(rf, path, 0x1a, BIT(14) | BIT(13) | BIT(12), dpk->bp[path][kidx].bw + 1);
+	if (dpk->bp[path][kidx].band == BAND_ON_24G && dpk->bp[path][kidx].bw == CHANNEL_WIDTH_40)
+		halrf_wrf(rf, path, 0x1a, BIT(14) | BIT(13) | BIT(12), 0x3);
+	else
+		halrf_wrf(rf, path, 0x1a, BIT(14) | BIT(13) | BIT(12), dpk->bp[path][kidx].bw + 1);
 	/*rxbb filter*/
 	halrf_wrf(rf, path, 0x1a, BIT(11) | BIT(10), 0x0);
 

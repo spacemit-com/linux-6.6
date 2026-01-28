@@ -131,8 +131,7 @@ static u32 cfg_ppdu_status(struct mac_ax_adapter *adapter,
 
 	ppdu->bmp_append_info = ppdu->bmp_append_info &
 				(MAC_AX_PPDU_MAC_INFO |
-				 MAC_AX_PPDU_PLCP |
-				 MAC_AX_PPDU_RX_CNT);
+				 MAC_AX_PPDU_PLCP);
 	ppdu->bmp_filter = ppdu->bmp_filter &
 			   (MAC_AX_PPDU_HAS_A1M |
 			    MAC_AX_PPDU_HAS_CRC_OK |

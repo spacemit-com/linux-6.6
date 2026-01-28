@@ -1594,6 +1594,19 @@ config SERIAL_NUVOTON_MA35D1_CONSOLE
 	  but you can alter that using a kernel command line option such as
 	  "console=ttyNVTx".
 
+config WK2XXX_SPI
+	tristate "WK2XXX SPI to serial port support"
+	select SERIAL_CORE
+	default n
+	help
+	  Say yes here to provide access to WK2XXX SPI to serial port
+
+config WK2XXX_SPI_RS485
+	bool "WK2XXX RS485 support"
+	depends on WK2XXX_SPI
+	help
+	  Say yes here to enable WK2XXX RS485 support
+
 endmenu
 
 config SERIAL_MCTRL_GPIO

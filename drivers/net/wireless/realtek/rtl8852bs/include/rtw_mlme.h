@@ -520,6 +520,10 @@ struct link_mlme_priv {
 
 	/* bcn check info */
 	struct beacon_keys cur_beacon_keys; /* save current beacon keys */
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+	struct beacon_keys new_beacon_keys; /* save new beacon keys */
+	u8 new_beacon_cnts; /* if new_beacon_cnts >= threshold, ap beacon is changed */
+#endif
 #ifdef PRIVATE_R
 	_queue idle_dis_bcn_queue;
 	_queue busy_dis_bcn_queue;

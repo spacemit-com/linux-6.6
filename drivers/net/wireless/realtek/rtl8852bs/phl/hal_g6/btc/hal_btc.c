@@ -30,7 +30,7 @@
  * btcx_desired: BT FW coex version -> main-version + 1 if update.
  * wlcx_desired: WL FW coex version -> sub-version + 1 if update
  */
-const u32 coex_ver = 0x070f0113;
+const u32 coex_ver = 0x07100013;
 
 static struct btc_ops _btc_ops = {
 	_ntfy_power_on,
@@ -817,6 +817,10 @@ static u8 _check_wl_ap_type(struct btc_t *btc, u8 *bssid, u8 type)
 			}
 		}
 		break;
+	case BTC_SPAP_CMW:
+		if (bssid[0] == 0)
+			is_match = 1;
+		break;
 #if BTC_AP_BLIST
 	case BTC_SPAP_SPTN:
 		for (i = 0; i < ARRAY_SIZE(btc_ap_sptn); i++) {
@@ -836,6 +840,7 @@ static u8 _check_wl_ap_type(struct btc_t *btc, u8 *bssid, u8 type)
 static void _update_wl_info(struct btc_t *btc, u8 rid, enum link_state reason)
 {
 	struct btc_wl_info *wl = &btc->cx.wl;
+	struct btc_dm *dm = &btc->dm;
 	struct btc_wl_link_info *wl_linfo = wl->link_info;
 	struct btc_wl_role_info *wl_rinfo = &wl->role_info;
 	struct btc_wl_dbcc_info *wl_dinfo = &wl->dbcc_info;
@@ -849,6 +854,7 @@ static void _update_wl_info(struct btc_t *btc, u8 rid, enum link_state reason)
 	u8 cid_role[BTC_WL_MAX_ROLE_NUMBER] = {0};
 	u8 client_cnt_last[BTC_WL_MAX_ROLE_NUMBER] = {0};
 	u8 dbcc_2g_phy = HW_PHY_0, phy_now = 0, phy_dbcc;
+	u8 cmw_ap_new = 0, buf[2] = {0};
 	u32 noa_duration = 0, sz = sizeof(struct rtw_chan_def), sz1;
 	bool b2g = false, b5g = false;
 	bool client_joined = false, client_inc_2g = false;
@@ -1049,6 +1055,13 @@ static void _update_wl_info(struct btc_t *btc, u8 rid, enum link_state reason)
 		_update_dbcc_band(HW_PHY_1);
 	}
 
+	cmw_ap_new = (wl->ap_type == BTC_SPAP_CMW) ? 1 : 0;
+	if (dm->cmw_ap != cmw_ap_new && btc->cx.other.type == BTC_EXTSOC_FUNC_THREAD) {
+		buf[0] = 0xf; /* for TIS issue */
+		buf[1] = cmw_ap_new;
+		if (_send_fw_cmd(btc, SET_H2C_TEST, buf, 2))
+			dm->cmw_ap = cmw_ap_new;
+	}
 	_set_wl_req_mac(btc, mac_id);
 	hal_btc_fw_set_drv_info(btc, CXDRVINFO_ROLE);
 }

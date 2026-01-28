@@ -387,7 +387,8 @@ void rtw_wnm_process_btm_req(_adapter *padapter,
 done:
 #ifdef CONFIG_RTW_MBO
 	/* for wifi-test; AP2 could power-off when BTM-req received */
-	if ((reason > 0) && (rtw_mbo_wifi_logo_test(padapter))) {
+	if (((reason > 0) && (rtw_mbo_wifi_logo_test(padapter))) ||
+			(reason == 7)) {
 		_rtw_memcpy(pnb->roam_target_addr,
 			pnb->nb_rpt[0].bssid, ETH_ALEN);
 		RTW_WNM_INFO("%s : used report 0 as roam_target_addr"
@@ -846,7 +847,7 @@ void rtw_wnm_update_reassoc_req_ie(_adapter *padapter)
 		_rtw_memcpy(pdup, pmlmepriv->assoc_req, offset);
 		_rtw_memcpy(pdup + offset,
 				pmlmepriv->assoc_req + offset + ETH_ALEN,
-				dup_len - offset);
+				pmlmepriv->assoc_req_len - offset - ETH_ALEN);
 		rtw_buf_update(&pmlmepriv->assoc_req,
 			&pmlmepriv->assoc_req_len, pdup, dup_len);
 		rtw_mfree(pdup, dup_len);

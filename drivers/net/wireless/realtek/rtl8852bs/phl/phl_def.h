@@ -1443,13 +1443,14 @@ enum rtw_fw_rsn {
 };
 
 enum rtw_fw_type {
-	RTW_FW_NIC, /* 1 */
+	RTW_FW_NIC = 1, /* 1 */
 	RTW_FW_WOWLAN, /* 2 */
 	RTW_FW_AP, /* 3 */
 	RTW_FW_ROM, /* 4 */
 	RTW_FW_SPIC, /* 5 */
 	RTW_FW_VRAP, /* 6 */
 	RTW_FW_NIC_CE, /* 7 */
+	RTW_FW_WOWLAN_CE, /* 8 */
 	RTW_FW_MAX
 };
 
@@ -4995,6 +4996,8 @@ enum pkt_ofld_type {
 	PKT_TYPE_MDNS_RSP_IPV6 = 14,
 	PKT_TYPE_MDNS_RSP_DATA = 15,
 	PKT_TYPE_MDNS_PASSTHRU_LIST = 16,
+	PKT_TYPE_APF_RSP_HDR = 17,
+	PKT_TYPE_APF_PROG = 18,
 	PKT_OFLD_TYPE_MAX,
 };
 

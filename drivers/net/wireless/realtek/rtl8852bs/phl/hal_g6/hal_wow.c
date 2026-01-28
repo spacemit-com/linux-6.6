@@ -209,6 +209,21 @@ rtw_hal_wow_cfg_nlo_chnl_list(void *hal, struct rtw_nlo_info *cfg)
 	return hstatus;
 }
 
+#ifdef CONFIG_PHL_WOW_APF
+enum rtw_hal_status
+rtw_hal_wow_access_apf(void *hal, u16 mac_id, struct rtw_apf_info *cfg, u8 set) {
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct mac_ax_ops *hal_mac_ops = mac->ops;
+	struct rtw_hal_mac_apf info = {0};
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_FAILURE;
+
+	hstatus = rtw_hal_mac_cfg_apf_ofld(hal_info, mac_id, cfg, set);
+
+	return hstatus;
+}
+#endif /* CONFIG_PHL_WOW_APF */
+
 enum rtw_hal_status rtw_hal_wow_init(struct rtw_phl_com_t *phl_com, void *hal,
                                      struct rtw_phl_stainfo_t *sta)
 {
@@ -345,6 +360,13 @@ rtw_hal_wow_func_en(struct rtw_phl_com_t *phl_com, void *hal, u16 macid,
 		if (cfg->mdns_ofld_info->mdns_en) {
 			hstatus = rtw_hal_mac_cfg_mdns_ofld(hal_info, macid, true,
 			                                    cfg->mdns_ofld_info);
+			if (RTW_HAL_STATUS_SUCCESS != hstatus)
+				break;
+		}
+#endif
+#ifdef CONFIG_PHL_WOW_APF
+		if (cfg->apf_info->apf_en) {
+			hstatus = rtw_hal_mac_cfg_apf_ofld(hal_info, macid, cfg->apf_info, 1);
 			if (RTW_HAL_STATUS_SUCCESS != hstatus)
 				break;
 		}

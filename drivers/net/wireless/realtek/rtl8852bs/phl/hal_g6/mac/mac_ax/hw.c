@@ -2038,6 +2038,32 @@ u32 mac_set_bt_dis(struct mac_ax_adapter *adapter, u8 en)
 	return MACSUCCESS;
 }
 
+u32 mac_tx_stuck_detect(struct mac_ax_adapter *adapter)
+{
+	u32 ret;
+
+	PLTFM_MSG_ALWAYS("[TEST]%s\n", __func__);
+	if (adapter->sm.fw_rst != MAC_AX_FW_RESET_RECV_DONE &&
+	    adapter->sm.fw_rst != MAC_AX_FW_RESET_PROCESS) {
+		ret = mac_h2c_path_check(adapter);
+		if (ret == MACPOLLTO) {
+			PLTFM_MSG_ERR("[ERR]%s: h2c lbk timeout %d, trigger SER\n", __func__, ret);
+#if MAC_AX_SDIO_SUPPORT
+			if (adapter->env_info.intf == MAC_AX_INTF_SDIO) {
+				mac_sdio_reg_dump(adapter);
+                        }
+#endif
+			return mac_trigger_dmac_err(adapter);
+		} else if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s: h2c lbk fail %d\n", __func__, ret);
+			return ret;
+		}
+	} else {
+		PLTFM_MSG_ERR("[WARN]%s: h2c lbk is doomed to fail, skip\n", __func__);
+	}
+	return MACSUCCESS;
+}
+
 u32 mac_watchdog(struct mac_ax_adapter *adapter,
 		 struct mac_ax_wdt_param *wdt_param)
 {
@@ -2137,7 +2163,11 @@ u32 mac_watchdog(struct mac_ax_adapter *adapter,
 	}
 #endif
 #endif
-
+#if MAC_AX_SDIO_SUPPORT
+	if (adapter->env_info.intf == MAC_AX_INTF_SDIO) {
+		mac_tx_stuck_detect(adapter);
+        }
+#endif
 #if MAC_AX_FEATURE_DBGPKG
 	ret = mac_wdt_log(adapter);
 	if (ret != MACSUCCESS) {
@@ -2146,6 +2176,12 @@ u32 mac_watchdog(struct mac_ax_adapter *adapter,
 	}
 #endif
 
+	ret = mac_pkt_ofld_watchdog(adapter);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("mac_pkt_ofld_watchdog fail %d\n", ret);
+		final_ret = ret;
+	}
+	
 	return final_ret;
 }
 
