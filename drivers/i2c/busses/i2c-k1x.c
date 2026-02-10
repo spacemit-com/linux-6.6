@@ -1339,7 +1339,9 @@ xfer_retry:
 	spacemit_i2c_init_xfer_params(spacemit_i2c);
 
 	ret = spacemit_i2c_read_reg(spacemit_i2c, REG_RST_CYC);
-	spacemit_i2c_write_reg(spacemit_i2c, REG_RST_CYC, I2C_SDA_GLITCH_FIX_BYPASS | ret);
+	if (spacemit_i2c->sda_glitch_nofix)
+		ret |= I2C_SDA_GLITCH_FIX_BYPASS;
+	spacemit_i2c_write_reg(spacemit_i2c, REG_RST_CYC, ret);
 
 	spacemit_i2c_mark_rw_flag(spacemit_i2c);
 
@@ -1775,6 +1777,8 @@ spacemit_i2c_parse_dt(struct platform_device *pdev, struct spacemit_i2c_dev *spa
 {
 	struct device_node *dnode = pdev->dev.of_node;
 	int ret;
+
+	spacemit_i2c->sda_glitch_nofix = of_property_read_bool(dnode, "spacemit,sda-glitch-nofix");
 
 	/* enable fast speed mode */
 	spacemit_i2c->fast_mode = of_property_read_bool(dnode, "spacemit,i2c-fast-mode");
