@@ -21,4 +21,22 @@ config K1X_EMAC
 	  This Driver support Spacemit k1-x Ethernet MAC
 	  Say Y to enable support for the Spacemit Ethernet.
 
+config K1XMAC_UIO
+	tristate "k1x Emac UIO ethernet controller"
+	default n
+	select UIO
+	help
+	  Say M here to build the k1x EMAC UIO driver for DPDK or other
+	  serspace network applications.
+
+	  This driver exports the Ethernet controller's registers and DMA
+	  descriptor rings to userspace via the UIO framework. It does not
+	  use the kernel network stack and is intended for use with DPDK
+	  PMD drivers.
+
+	  If you want to use the k1x EMAC hardware with DPDK, enable this
+	  driver. If unsure, say N.
+
+	  The module will be called k1xmac_uio.ko.
+
 endif # NET_VENDOR_SPACEMIT
