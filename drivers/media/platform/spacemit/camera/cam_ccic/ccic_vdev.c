@@ -1226,7 +1226,7 @@ struct spm_ccic_vnode* spm_cvdev_create_vnode(const char *name,
 	ac_vnode->vnode.release = spm_cvdev_release;
 	ac_vnode->vnode.device_caps = V4L2_CAP_STREAMING | V4L2_CAP_VIDEO_CAPTURE_MPLANE;
 	ac_vnode->vnode.v4l2_dev = v4l2_dev;
-	ret = __video_register_device(&ac_vnode->vnode, VFL_TYPE_VIDEO, -1, 1, THIS_MODULE);
+	ret = __video_register_device(&ac_vnode->vnode, VFL_TYPE_VIDEO, idx, 1, THIS_MODULE);
 	if (ret) {
 		pr_err("%s video dev register failed for spm_ccic_vnode(%s).\n", __func__, name);
 		goto vdev_register_fail;
