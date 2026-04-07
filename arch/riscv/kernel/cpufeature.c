@@ -900,6 +900,9 @@ void riscv_user_isa_enable(void)
 {
 	if (riscv_cpu_has_extension_unlikely(smp_processor_id(), RISCV_ISA_EXT_ZICBOZ))
 		csr_set(CSR_ENVCFG, ENVCFG_CBZE);
+
+	if (riscv_isa_extension_available(NULL, ZICBOM))
+		csr_set(CSR_SENVCFG, ENVCFG_CBCFE | (ENVCFG_CBIE_FLUSH << ENVCFG_CBIE_SHIFT));
 }
 
 #ifdef CONFIG_RISCV_ALTERNATIVE
