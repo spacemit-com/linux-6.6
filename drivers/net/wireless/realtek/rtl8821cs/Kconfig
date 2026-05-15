@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+config RTL8821CS
+	tristate "Realtek 8821C SDIO Wireless driver"
+	depends on WLAN && MMC && CFG80211
+	help
+	  This option enables support for RTL8821CS SDIO drivers
