@@ -218,6 +218,9 @@ struct spacemit_i2c_dev {
 	u32			i2c_lcr;
 	u32			i2c_wcr;
 
+	/*Controls whether to bypass the controller's SDA glitch fix logic. */
+	bool			sda_glitch_nofix;
+
 	bool			dma_disable;
 	bool			shutdown;
 

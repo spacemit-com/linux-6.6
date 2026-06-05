@@ -1941,6 +1941,20 @@
 			};
 		};
 
+		emac_uio0: uio@cac80000 {
+			compatible = "k1x,uio-emac";
+			reg = <0x0 0xcac80000 0x0 0x1000>;
+			k1x,ethernet = <&eth0>;
+			status = "disabled";
+		};
+
+		emac_uio1: uio@cac81000 {
+			compatible = "k1x,uio-emac";
+			reg = <0x0 0xcac81000 0x0 0x1000>;
+			k1x,ethernet = <&eth1>;
+			status = "disabled";
+		};
+
 		ec_master: ethercat_master {
 			compatible = "igh,k1x-ec-master";
 			run-on-cpu = <1>;
