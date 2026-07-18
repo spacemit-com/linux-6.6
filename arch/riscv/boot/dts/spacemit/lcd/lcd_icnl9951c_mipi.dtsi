@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 / { lcds: lcds {
-	lcd_icnl9951r_mipi: lcd_icnl9951r_mipi {
+	lcd_icnl9951c_mipi: lcd_icnl9951c_mipi {
 		dsi-work-mode = <1>; /* video burst mode*/
 		dsi-lane-number = <4>;
 		dsi-color-format = "rgb888";

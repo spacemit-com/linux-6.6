@@ -7,6 +7,7 @@
 #include "k1-x-efuse.dtsi"
 #include "k1-x_pinctrl.dtsi"
 #include "lcd/lcd_icnl9951r_mipi.dtsi"
+#include "lcd/lcd_icnl9951c_mipi.dtsi"
 #include "k1-x-lcd.dtsi"
 #include "k1-x-hdmi.dtsi"
 #include "k1-x_opp_table.dtsi"
