@@ -235,6 +235,7 @@ PVRSRV_ERROR PVRSRVCommonConnectionConnect(void **ppvPrivData, void *pvOSData)
 	OSStringSafeCopy(psConnection->pszProcName, OSGetCurrentClientProcessNameKM(), PVRSRV_CONNECTION_PROCESS_NAME_LEN);
 
 #if defined(SUPPORT_DMA_TRANSFER)
+#include "dma_km.h"
 	eError = PVRSRVInitialiseDMA(psDevNode, psConnection);
 	PVR_LOG_GOTO_IF_ERROR(eError, "PVRSRVInitialiseDMA", failure);
 #endif

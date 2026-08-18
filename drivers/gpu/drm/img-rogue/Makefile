@@ -153,7 +153,9 @@ pvrsrvkm-y += \
  server_rgxkicksync_bridge.o \
  rgxkicksync.o \
  pvr_sync_ioctl_common.o \
- pvr_sync_ioctl_drm.o
+ pvr_sync_ioctl_drm.o \
+ dma_km.o \
+ server_dma_bridge.o
 pvrsrvkm-$(CONFIG_POWERVR_DVFS)   += pvr_dvfs_device.o pvr_dvfs_common.o
 pvrsrvkm-$(CONFIG_ARM)   += osfunc_arm.o
 pvrsrvkm-$(CONFIG_ARM64) += osfunc_arm64.o
