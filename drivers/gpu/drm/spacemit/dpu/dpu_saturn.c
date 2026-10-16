@@ -951,6 +951,7 @@ static void spacemit_set_afbc_info(struct spacemit_drm_private *priv, uint64_t m
 
 #define CONFIG_HW_COMPOSER_LAYER(id) \
 {\
+	u32 offset = 14 + (id) * 8; \
 	dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _rect_ltopx, crtc_x); \
 	dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _rect_ltopy, crtc_y); \
 	dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _rect_rbotx, crtc_x + crtc_w - 1); \
@@ -971,6 +972,8 @@ static void spacemit_set_afbc_info(struct spacemit_drm_private *priv, uint64_t m
 		dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _solid_en, 0); \
 		dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _layer_id, rdma_id); \
 	} \
+	writel((crtc_y & 0xffff) | ((crtc_x + crtc_w - 1) << 16), \
+		hwdev->base + base + (offset + 5) * sizeof(u32)); \
 	dpu_write_reg(hwdev, CMPS_X_REG, base, m_nl ## id ## _en, 1); \
 }
 
